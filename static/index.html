@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高考分析中心 v5</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --apple-blue: #007AFF;
+  --apple-green: #34C759;
+  --apple-orange: #FF9500;
+  --apple-red: #FF3B30;
+  --apple-purple: #AF52DE;
+  --apple-teal: #5AC8FA;
+  --apple-pink: #FF2D55;
+  --apple-indigo: #5856D6;
+  --gray-1: #8E8E93;
+  --gray-2: #AEAEB2;
+  --gray-3: #C7C7CC;
+  --gray-4: #D1D1D6;
+  --gray-5: #E5E5EA;
+  --gray-6: #F2F2F7;
+  --bg: #FFFFFF;
+  --bg-secondary: #F5F5F7;
+  --text-1: #1D1D1F;
+  --text-2: #86868B;
+  --text-3: #AEAEB2;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.10);
+  --shadow-float: 0 20px 60px rgba(0,0,0,0.14);
+  --glass-bg: rgba(255,255,255,0.55);
+  --glass-border: rgba(255,255,255,0.25);
+  --glass-blur: blur(40px) saturate(180%);
+  --liquid-bg: rgba(255,255,255,0.35);
+  --liquid-border: rgba(255,255,255,0.18);
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', sans-serif;
+  --transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  --spring: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg-secondary);
+  color: var(--text-1);
+  line-height: 1.5;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ===== 液态玻璃导航栏 ===== */
+.navbar {
+  position: fixed; top:0; left:0; right:0; z-index:1000;
+  background: rgba(255,255,255,0.62);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-bottom: 0.5px solid rgba(255,255,255,0.3);
+  padding: 0 28px;
+  height: 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  animation: navSlideIn 0.6s cubic-bezier(0.25,0.1,0.25,1);
+}
+@keyframes navSlideIn {
+  from { transform: translateY(-100%); opacity:0; }
+  to { transform: translateY(0); opacity:1; }
+}
+.nav-brand {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 18px; font-weight: 700; color: var(--text-1);
+  letter-spacing: -0.3px;
+}
+.nav-brand .icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--apple-blue), var(--apple-purple));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 16px;
+}
+.nav-search {
+  position: relative;
+  width: 460px; max-width: 42vw;
+}
+.nav-search input {
+  width: 100%;
+  height: 40px;
+  padding: 0 16px 0 42px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--gray-6);
+  font-size: 14px;
+  font-family: var(--font);
+  color: var(--text-1);
+  outline: none;
+  transition: var(--transition);
+  box-shadow: inset 0 0 0 0 rgba(0,122,255,0);
+}
+.nav-search input:focus {
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(0,122,255,0.2), var(--shadow-md);
+  transform: scale(1.01);
+}
+.nav-search input::placeholder { color: var(--gray-2); }
+.nav-search .search-icon {
+  position: absolute; left:14px; top:50%; transform:translateY(-50%);
+  color: var(--gray-2); font-size: 16px; pointer-events:none;
+}
+.nav-search .suggestions {
+  position: absolute; top:48px; left:0; right:0;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  max-height: 320px; overflow-y: auto;
+  display: none; z-index: 1001;
+  border: 0.5px solid var(--glass-border);
+}
+.nav-search .suggestions.show { display: block; animation: suggestIn 0.2s ease-out; }
+@keyframes suggestIn {
+  from { opacity:0; transform:translateY(-8px); }
+  to { opacity:1; transform:translateY(0); }
+}
+.nav-search .suggestions .sug-item {
+  padding: 12px 16px; cursor: pointer; font-size: 13px;
+  border-bottom: 0.5px solid rgba(0,0,0,0.04);
+  transition: background 0.15s;
+}
+.nav-search .suggestions .sug-item:hover { background: rgba(0,122,255,0.08); }
+.nav-search .suggestions .sug-item:last-child { border-bottom: none; }
+.nav-actions { display:flex; gap:8px; align-items:center; }
+.nav-btn {
+  height: 38px; padding: 0 18px;
+  border: none; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: var(--font);
+  transition: var(--spring);
+  display: flex; align-items: center; gap: 6px;
+}
+.nav-btn.primary {
+  background: var(--apple-blue); color: #fff;
+  box-shadow: 0 2px 8px rgba(0,122,255,0.3);
+}
+.nav-btn.primary:hover { transform: scale(1.04); box-shadow: 0 4px 16px rgba(0,122,255,0.4); }
+.nav-btn.primary:active { transform: scale(0.97); }
+.nav-btn.secondary {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  color: var(--text-1);
+  border: 0.5px solid var(--glass-border);
+}
+.nav-btn.secondary:hover { background: rgba(255,255,255,0.75); transform: scale(1.02); }
+
+/* ===== 主布局 ===== */
+.main {
+  margin-top: 56px;
+  display: flex;
+  min-height: calc(100vh - 56px);
+}
+.sidebar {
+  width: 220px;
+  padding: 20px 14px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(30px) saturate(150%);
+  -webkit-backdrop-filter: blur(30px) saturate(150%);
+  border-right: 0.5px solid var(--glass-border);
+  flex-shrink: 0;
+  position: sticky;
+  top: 56px;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  animation: sidebarIn 0.5s 0.1s both ease-out;
+}
+@keyframes sidebarIn {
+  from { opacity:0; transform:translateX(-20px); }
+  to { opacity:1; transform:translateX(0); }
+}
+.sidebar-section { margin-bottom: 24px; }
+.sidebar-title {
+  font-size: 11px; font-weight: 700; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 0.8px;
+  padding: 0 12px; margin-bottom: 8px;
+}
+.sidebar-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text-1);
+  transition: var(--transition);
+}
+.sidebar-item:hover { background: rgba(0,122,255,0.06); }
+.sidebar-item.active {
+  background: rgba(0,122,255,0.1); color: var(--apple-blue); font-weight: 600;
+}
+.sidebar-item .dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.content {
+  flex: 1;
+  padding: 28px 32px;
+  max-width: 1280px;
+}
+
+/* ===== 页面标签 ===== */
+.page { display: none; }
+.page.active { display: block; animation: pageIn 0.4s ease-out; }
+@keyframes pageIn {
+  from { opacity:0; transform:translateY(12px); }
+  to { opacity:1; transform:translateY(0); }
+}
+
+/* ===== 统计卡片 — 液态玻璃 ===== */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+  transition: var(--spring);
+  position: relative;
+  overflow: hidden;
+}
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--apple-blue), var(--apple-purple));
+  border-radius: 3px 3px 0 0;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px) scale(1.01);
+}
+.stat-card:hover::before { opacity: 1; }
+.stat-card .stat-icon {
+  width: 40px; height: 40px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; margin-bottom: 14px;
+}
+.stat-card .stat-value {
+  font-size: 32px; font-weight: 800; letter-spacing: -1px;
+  color: var(--text-1);
+  line-height: 1;
+}
+.stat-card .stat-label {
+  font-size: 12px; color: var(--text-2); margin-top: 4px; font-weight: 500;
+}
+.stat-card.blue .stat-icon { background: rgba(0,122,255,0.1); }
+.stat-card.green .stat-icon { background: rgba(52,199,89,0.1); }
+.stat-card.orange .stat-icon { background: rgba(255,149,0,0.1); }
+.stat-card.purple .stat-icon { background: rgba(175,82,222,0.1); }
+.stat-card.teal .stat-icon { background: rgba(90,200,250,0.1); }
+.stat-card.red .stat-icon { background: rgba(255,45,85,0.1); }
+
+/* ===== 区块标题 ===== */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 18px;
+}
+.section-title {
+  font-size: 20px; font-weight: 700; letter-spacing: -0.4px;
+}
+.section-action {
+  font-size: 13px; color: var(--apple-blue); cursor: pointer;
+  font-weight: 500;
+  transition: var(--transition);
+}
+.section-action:hover { text-decoration: underline; }
+
+/* ===== 试卷列表 ===== */
+.paper-list { display: flex; flex-direction: column; gap: 10px; }
+.paper-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: var(--spring);
+  display: flex; align-items: center; gap: 18px;
+}
+.paper-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px) scale(1.005);
+  background: rgba(255,255,255,0.7);
+}
+.paper-card:active { transform: translateY(0) scale(0.995); }
+.paper-card .paper-icon {
+  width: 48px; height: 48px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; flex-shrink: 0;
+}
+.paper-card .paper-icon.real { background: rgba(255,45,85,0.08); }
+.paper-card .paper-icon.mock { background: rgba(0,122,255,0.08); }
+.paper-card .paper-info { flex:1; min-width:0; }
+.paper-card .paper-title {
+  font-size: 15px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.paper-card .paper-title em {
+  font-style: normal; background: rgba(0,122,255,0.15); border-radius: 3px;
+  padding: 0 3px;
+}
+.paper-card .paper-meta {
+  font-size: 12px; color: var(--text-2); margin-top: 4px;
+  display: flex; gap: 14px; flex-wrap: wrap;
+}
+.paper-card .paper-badges { display: flex; gap: 6px; flex-shrink: 0; }
+.badge {
+  font-size: 11px; font-weight: 600; padding: 3px 10px;
+  border-radius: 8px; white-space: nowrap;
+  letter-spacing: 0.2px;
+}
+.badge.blue { background: rgba(0,122,255,0.1); color: var(--apple-blue); }
+.badge.green { background: rgba(52,199,89,0.1); color: var(--apple-green); }
+.badge.orange { background: rgba(255,149,0,0.1); color: var(--apple-orange); }
+.badge.red { background: rgba(255,45,85,0.1); color: var(--apple-red); }
+.badge.purple { background: rgba(175,82,222,0.1); color: var(--apple-purple); }
+.badge.gray { background: var(--gray-6); color: var(--gray-1); }
+
+/* ===== 筛选栏 ===== */
+.filter-bar {
+  display: flex; flex-wrap: wrap; gap: 10px;
+  margin-bottom: 20px; align-items: center;
+}
+.filter-select {
+  height: 36px; padding: 0 14px;
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  font-size: 13px; font-family: var(--font);
+  color: var(--text-1); cursor: pointer;
+  outline: none;
+  transition: var(--transition);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2386868B' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+}
+.filter-select:focus {
+  border-color: var(--apple-blue);
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
+}
+
+/* ===== 试卷详情 ===== */
+.detail-header { margin-bottom: 28px; }
+.detail-title {
+  font-size: 28px; font-weight: 800; letter-spacing: -0.5px;
+  margin-bottom: 10px;
+}
+.detail-meta {
+  display: flex; flex-wrap: wrap; gap: 18px;
+  font-size: 14px; color: var(--text-2);
+}
+.question-list { display: flex; flex-direction: column; gap: 14px; }
+.question-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+}
+.question-card:hover { box-shadow: var(--shadow-md); }
+.question-card .q-header {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 10px;
+}
+.question-card .q-num { font-size: 14px; font-weight: 700; color: var(--apple-blue); }
+.question-card .q-type {
+  font-size: 11px; padding: 2px 8px; border-radius: 6px;
+  background: rgba(0,122,255,0.1); color: var(--apple-blue);
+  font-weight: 600;
+}
+.question-card .q-score {
+  font-size: 11px; padding: 2px 8px; border-radius: 6px;
+  background: rgba(52,199,89,0.1); color: var(--apple-green);
+  font-weight: 600;
+}
+.question-card .q-content { font-size: 14px; line-height: 1.7; color: var(--text-1); }
+.question-card .q-content em {
+  font-style: normal; background: rgba(0,122,255,0.15); border-radius: 2px;
+  padding: 0 2px;
+}
+.question-card .q-kp { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+.question-card .kp-tag {
+  font-size: 10px; padding: 2px 8px; border-radius: 6px;
+  background: rgba(0,0,0,0.04); color: var(--text-2);
+  font-weight: 500;
+}
+
+/* ===== 分析图表 ===== */
+.chart-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 18px;
+  margin-top: 20px;
+}
+.chart-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+.chart-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+.chart-card canvas { width: 100%!important; }
+
+/* ===== 采集面板 ===== */
+.collect-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  padding: 28px;
+  box-shadow: var(--shadow-md);
+  margin-bottom: 20px;
+}
+.collect-form {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+}
+.form-group { display:flex; flex-direction:column; gap:6px; }
+.form-group label { font-size: 12px; color: var(--text-2); font-weight: 600; }
+.form-group input, .form-group select {
+  height: 40px; padding: 0 14px;
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  font-size: 13px; font-family: var(--font);
+  outline: none; background: var(--bg);
+  transition: var(--transition);
+}
+.form-group input:focus, .form-group select:focus {
+  border-color: var(--apple-blue);
+  box-shadow: 0 0 0 3px rgba(0,122,255,0.15);
+}
+.log-table {
+  width: 100%; border-collapse: collapse; margin-top: 18px;
+}
+.log-table th, .log-table td {
+  text-align: left; padding: 12px 14px; font-size: 12px;
+  border-bottom: 0.5px solid rgba(0,0,0,0.04);
+}
+.log-table th { color: var(--text-2); font-weight: 600; }
+.log-table tr:hover td { background: rgba(0,122,255,0.03); }
+
+/* ===== 官方文件卡片 ===== */
+.doc-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 22px;
+  box-shadow: var(--shadow-sm);
+  transition: var(--spring);
+  display: flex; align-items: flex-start; gap: 16px;
+}
+.doc-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+.doc-card .doc-icon {
+  width: 44px; height: 44px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+  background: rgba(0,122,255,0.08);
+}
+.doc-card .doc-title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.doc-card .doc-meta { font-size: 12px; color: var(--text-2); }
+
+/* ===== Toast 通知 ===== */
+.toast-container {
+  position: fixed; top: 72px; right: 28px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.toast {
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 14px 18px; box-shadow: var(--shadow-float);
+  font-size: 13px; min-width: 260px; max-width: 400px;
+  display: flex; align-items: center; gap: 10px;
+  animation: toastIn 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  border-left: 3px solid var(--gray-3);
+}
+.toast.success { border-left-color: var(--apple-green); }
+.toast.error { border-left-color: var(--apple-red); }
+.toast.info { border-left-color: var(--apple-blue); }
+.toast .toast-icon { font-size: 16px; }
+@keyframes toastIn {
+  from { transform: translateX(120px) scale(0.9); opacity: 0; }
+  to { transform: translateX(0) scale(1); opacity: 1; }
+}
+
+/* ===== 分页 ===== */
+.pagination {
+  display: flex; justify-content: center; gap: 6px;
+  margin-top: 24px;
+}
+.page-btn {
+  min-width: 36px; height: 36px;
+  border: 0.5px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg);
+  font-size: 13px; font-family: var(--font);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+  font-weight: 500;
+}
+.page-btn:hover { border-color: var(--apple-blue); color: var(--apple-blue); transform: scale(1.05); }
+.page-btn.active { background: var(--apple-blue); color: #fff; border-color: var(--apple-blue); }
+.page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ===== 空状态 ===== */
+.empty-state {
+  text-align: center; padding: 80px 20px; color: var(--text-2);
+}
+.empty-state .empty-icon { font-size: 56px; margin-bottom: 16px; }
+.empty-state .empty-text { font-size: 16px; margin-bottom: 8px; font-weight: 500; }
+.empty-state .empty-hint { font-size: 14px; color: var(--text-3); }
+
+/* ===== 加载 ===== */
+.loading {
+  display: flex; align-items: center; justify-content: center;
+  padding: 48px; color: var(--text-2);
+}
+.spinner {
+  width: 28px; height: 28px;
+  border: 3px solid var(--gray-5);
+  border-top-color: var(--apple-blue);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ===== 地区校验提示 ===== */
+.region-warn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  background: rgba(255,149,0,0.08);
+  border: 1px solid rgba(255,149,0,0.2);
+  border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--apple-orange);
+  margin-top: 12px;
+}
+.region-ok {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px;
+  background: rgba(52,199,89,0.08);
+  border: 1px solid rgba(52,199,89,0.2);
+  border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--apple-green);
+  margin-top: 12px;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .content { padding: 16px; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .chart-grid { grid-template-columns: 1fr; }
+  .nav-search { max-width: 50vw; width: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- 导航栏 -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <div class="icon">&#9729;</div>
+    <span>高考分析中心</span>
+  </div>
+  <div class="nav-search">
+    <span class="search-icon">&#128269;</span>
+    <input type="text" id="globalSearch" placeholder="搜索试卷、题目、知识点..." autocomplete="off">
+    <div class="suggestions" id="searchSuggestions"></div>
+  </div>
+  <div class="nav-actions">
+    <button class="nav-btn secondary" onclick="switchPage('docs')">&#128214; 文件库</button>
+    <button class="nav-btn secondary" onclick="switchPage('collect')">&#11015; 采集</button>
+  </div>
+</nav>
+
+<!-- 主布局 -->
+<div class="main">
+  <!-- 侧边栏 -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">导航</div>
+      <div class="sidebar-item active" onclick="switchPage('dashboard')">
+        <span>&#9733;</span> 仪表盘
+      </div>
+      <div class="sidebar-item" onclick="switchPage('papers')">
+        <span>&#128196;</span> 试卷库
+      </div>
+      <div class="sidebar-item" onclick="switchPage('collect')">
+        <span>&#11015;</span> 采集站
+      </div>
+      <div class="sidebar-item" onclick="switchPage('docs')">
+        <span>&#128214;</span> 官方文件库
+      </div>
+      <div class="sidebar-item" onclick="switchPage('audit')">
+        <span>&#9989;</span> 真实性审核
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">科目</div>
+      <div id="subjectSidebar"></div>
+    </div>
+  </aside>
+
+  <!-- 内容区 -->
+  <div class="content">
+    <!-- 仪表盘 -->
+    <div class="page active" id="page-dashboard">
+      <div class="stats-row" id="statsRow"></div>
+      <div class="section-header">
+        <div class="section-title">最近试卷</div>
+        <div class="section-action" onclick="switchPage('papers')">查看全部 &rarr;</div>
+      </div>
+      <div class="paper-list" id="latestPapers"></div>
+    </div>
+
+    <!-- 试卷库 -->
+    <div class="page" id="page-papers">
+      <div class="section-header">
+        <div class="section-title">试卷库</div>
+      </div>
+      <div class="filter-bar" id="filterBar">
+        <input type="text" class="filter-select" id="filterKeyword" placeholder="搜索试卷标题/地区/学校..." style="width:240px;padding-left:14px;padding-right:14px" oninput="debounceSearch()">
+        <select class="filter-select" id="filterSubject" onchange="searchPapers()">
+          <option value="">全部科目</option>
+        </select>
+        <select class="filter-select" id="filterType" onchange="searchPapers()">
+          <option value="">全部类型</option>
+        </select>
+        <select class="filter-select" id="filterYear" onchange="searchPapers()">
+          <option value="">全部年份</option>
+        </select>
+        <select class="filter-select" id="filterProvince" onchange="searchPapers()">
+          <option value="">全部省份</option>
+        </select>
+        <select class="filter-select" id="filterExamTag" onchange="searchPapers()">
+          <option value="">全部考试</option>
+        </select>
+        <select class="filter-select" id="filterVerified" onchange="searchPapers()">
+          <option value="">验证状态</option>
+          <option value="1">已验证</option>
+          <option value="0">未验证</option>
+        </select>
+        <button class="nav-btn secondary" onclick="clearFilters()" style="height:36px;padding:0 14px;font-size:12px">&#10005; 清除</button>
+      </div>
+      <div id="activeFilters" style="margin-bottom:12px"></div>
+      <div class="paper-list" id="paperList"></div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+
+    <!-- 试卷详情 -->
+    <div class="page" id="page-detail">
+      <div id="detailContent"></div>
+    </div>
+
+    <!-- 采集站 -->
+    <div class="page" id="page-collect">
+      <div class="section-header">
+        <div class="section-title">数据采集</div>
+      </div>
+      <div class="collect-panel">
+        <div class="collect-form">
+          <div class="form-group">
+            <label>年份</label>
+            <input type="number" id="collectYear" value="2026" min="2020" max="2030">
+          </div>
+          <div class="form-group">
+            <label>科目</label>
+            <select id="collectSubject">
+              <option value="">全部</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>关键词</label>
+            <input type="text" id="collectKeyword" placeholder="如：深圳二模">
+          </div>
+          <button class="nav-btn primary" onclick="startCollect()">&#9654; 开始采集</button>
+        </div>
+      </div>
+      <div class="section-header">
+        <div class="section-title">采集统计</div>
+      </div>
+      <div class="stats-row" id="collectStats"></div>
+      <div class="section-header">
+        <div class="section-title">自动采集状态</div>
+      </div>
+      <div id="autoScraperStatus"></div>
+      <div class="section-header">
+        <div class="section-title">采集日志</div>
+      </div>
+      <div id="scrapeLogs"></div>
+    </div>
+
+    <!-- 官方文件库 -->
+    <div class="page" id="page-docs">
+      <div class="section-header">
+        <div class="section-title">官方文件库</div>
+        <div class="section-action" onclick="refreshDocs()">&#128260; 刷新</div>
+      </div>
+      <div class="filter-bar">
+        <select class="filter-select" id="docCategory" onchange="loadDocs()">
+          <option value="">全部分类</option>
+        </select>
+        <input type="text" class="filter-select" id="docKeyword" placeholder="搜索文件..." style="padding-left:14px" onchange="loadDocs()">
+      </div>
+      <div class="paper-list" id="docsList"></div>
+    </div>
+
+    <!-- 真实性审核 -->
+    <div class="page" id="page-audit">
+      <div class="section-header">
+        <div class="section-title">真实性审核</div>
+        <button class="nav-btn primary" onclick="runBatchAudit()">&#9654; 批量审核</button>
+      </div>
+      <div class="stats-row" id="auditStats"></div>
+      <div id="auditResults"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast 容器 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ===== 全局状态 =====
+let currentPage = 'dashboard';
+let searchPage = 1;
+let currentSubject = '';
+const PAGE_SIZE = 20;
+
+// ===== API 工具 =====
+async function api(url, opts = {}) {
+  try {
+    const resp = await fetch(url, opts);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({detail: resp.statusText}));
+      let msg = '请求失败';
+      if (typeof err.detail === 'string') msg = err.detail;
+      else if (Array.isArray(err.detail)) msg = err.detail.map(e => e.msg || JSON.stringify(e)).join('; ');
+      else msg = JSON.stringify(err.detail) || resp.statusText;
+      throw new Error(msg);
+    }
+    return await resp.json();
+  } catch (e) {
+    showToast(e.message, 'error');
+    throw e;
+  }
+}
+
+// ===== Toast =====
+function showToast(msg, type='info') {
+  const c = document.getElementById('toastContainer');
+  const icons = { info: '\u2139', success: '\u2713', error: '\u2717' };
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span class="toast-icon">${icons[type]||''}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(40px)'; setTimeout(() => t.remove(), 300); }, 3500);
+}
+
+// ===== 页面切换 =====
+function switchPage(page, data) {
+  currentPage = page;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(`page-${page}`).classList.add('active');
+  document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+  const pages = ['dashboard','papers','collect','docs','audit'];
+  const idx = pages.indexOf(page);
+  if (idx >= 0) document.querySelectorAll('.sidebar-item')[idx]?.classList.add('active');
+
+  if (page === 'dashboard') loadDashboard();
+  else if (page === 'papers') searchPapers();
+  else if (page === 'detail' && data) loadDetail(data);
+  else if (page === 'collect') loadCollectStatus();
+  else if (page === 'docs') loadDocs();
+  else if (page === 'audit') loadAuditPage();
+}
+
+// ===== 搜索 =====
+let searchTimer;
+let debounceTimer;
+document.getElementById('globalSearch').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  const q = this.value.trim();
+  searchTimer = setTimeout(() => {
+    if (q.length >= 1) fetchSuggestions(q);
+    else document.getElementById('searchSuggestions').classList.remove('show');
+  }, 300);
+});
+document.getElementById('globalSearch').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('searchSuggestions').classList.remove('show');
+    document.getElementById('filterKeyword').value = this.value;
+    searchPage = 1;
+    switchPage('papers');
+  }
+});
+
+function debounceSearch() {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { searchPage = 1; searchPapers(); }, 300);
+}
+
+function clearFilters() {
+  document.getElementById('filterKeyword').value = '';
+  document.getElementById('filterSubject').value = '';
+  document.getElementById('filterType').value = '';
+  document.getElementById('filterYear').value = '';
+  document.getElementById('filterProvince').value = '';
+  document.getElementById('filterExamTag').value = '';
+  document.getElementById('filterVerified').value = '';
+  document.getElementById('globalSearch').value = '';
+  searchPage = 1;
+  searchPapers();
+}
+
+async function fetchSuggestions(q) {
+  try {
+    const data = await api(`/api/search/suggest?q=${encodeURIComponent(q)}`);
+    const box = document.getElementById('searchSuggestions');
+    if (data.suggestions && data.suggestions.length) {
+      box.innerHTML = data.suggestions.map(s =>
+        `<div class="sug-item" onclick="document.getElementById('globalSearch').value='${s.replace(/'/g,"\\'")}';document.getElementById('filterKeyword').value='${s.replace(/'/g,"\\'")}';document.getElementById('searchSuggestions').classList.remove('show');searchPage=1;switchPage('papers')">${s}</div>`
+      ).join('');
+      box.classList.add('show');
+    } else {
+      box.classList.remove('show');
+    }
+  } catch {}
+}
+
+async function searchPapers() {
+  const navQ = document.getElementById('globalSearch').value.trim();
+  const filterQ = document.getElementById('filterKeyword').value.trim();
+  // 优先用 filter bar 的关键词
+  const q = filterQ || navQ;
+  if (filterQ && !navQ) document.getElementById('globalSearch').value = filterQ;
+
+  const subject = document.getElementById('filterSubject').value || currentSubject || '';
+  const type = document.getElementById('filterType').value;
+  const year = document.getElementById('filterYear').value;
+  const province = document.getElementById('filterProvince').value;
+  const examTag = document.getElementById('filterExamTag').value;
+  const verified = document.getElementById('filterVerified').value;
+
+  let params = new URLSearchParams({page: searchPage, size: PAGE_SIZE});
+  if (q) params.set('q', q);
+  if (subject) params.set('subject', subject);
+  if (type) params.set('paper_type', type);
+  if (year) params.set('year', year);
+  if (province) params.set('province', province);
+  if (examTag) params.set('exam_tag', examTag);
+  if (verified) params.set('verified', verified);
+
+  // 显示激活的筛选标签
+  renderActiveFilters({q, subject, type, year, province, examTag, verified});
+
+  const list = document.getElementById('paperList');
+  list.innerHTML = '<div class="loading"><div class="spinner"></div>搜索中...</div>';
+
+  try {
+    const data = await api(`/api/search?${params}`);
+    if (!data.data.length) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128270;</div><div class="empty-text">没有找到相关试卷</div><div class="empty-hint">试试其他关键词或调整筛选条件</div></div>';
+    } else {
+      list.innerHTML = data.data.map(p => renderPaperCard(p)).join('');
+    }
+    renderPagination(data.total, searchPage);
+  } catch {
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">&#9888;</div><div class="empty-text">搜索出错了</div></div>';
+  }
+}
+
+function renderActiveFilters(filters) {
+  const el = document.getElementById('activeFilters');
+  const tags = [];
+  if (filters.q) tags.push({label: `搜索: ${filters.q}`, clear: () => { document.getElementById('filterKeyword').value=''; document.getElementById('globalSearch').value=''; }});
+  if (filters.subject) tags.push({label: document.getElementById('filterSubject').selectedOptions[0].text, clear: () => { document.getElementById('filterSubject').value=''; }});
+  if (filters.type) tags.push({label: document.getElementById('filterType').selectedOptions[0].text, clear: () => { document.getElementById('filterType').value=''; }});
+  if (filters.year) tags.push({label: `${filters.year}年`, clear: () => { document.getElementById('filterYear').value=''; }});
+  if (filters.province) tags.push({label: filters.province, clear: () => { document.getElementById('filterProvince').value=''; }});
+  if (filters.examTag) tags.push({label: filters.examTag, clear: () => { document.getElementById('filterExamTag').value=''; }});
+  if (filters.verified) tags.push({label: filters.verified==='1'?'已验证':'未验证', clear: () => { document.getElementById('filterVerified').value=''; }});
+
+  if (!tags.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = tags.map((t, i) =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 12px;background:rgba(0,122,255,0.08);border:1px solid rgba(0,122,255,0.2);border-radius:8px;font-size:12px;color:var(--apple-blue);margin-right:6px;margin-bottom:6px;cursor:pointer" onclick="clearFilter${i}()">${t.label} &times;</span>`
+  ).join('');
+
+  // 挂载清除函数
+  tags.forEach((t, i) => { window[`clearFilter${i}`] = () => { t.clear(); searchPage=1; searchPapers(); }; });
+}
+
+function renderPaperCard(p) {
+  const typeLabels = {real:'真题',provincial:'省质检',school:'联考',monthly:'月考',special:'专项'};
+  const typeBadge = typeLabels[p.paper_type] || p.paper_type;
+  const icon = p.paper_type === 'real' ? '&#127942;' : '&#128196;';
+  const iconClass = p.paper_type === 'real' ? 'real' : 'mock';
+  const verifiedBadge = p.verified ? '<span class="badge green">已验证</span>' : '';
+  const priorityBadge = p.source_priority ? `<span class="badge ${p.source_priority==='S'||p.source_priority==='A'?'blue':'gray'}">${p.source_priority}级</span>` : '';
+  const analysisBadge = p.analysis_status === 'simulated' ? '<span class="badge purple">已分析</span>' :
+                        p.analysis_status === 'irt_estimated' ? '<span class="badge orange">IRT</span>' : '';
+
+  let titleHtml = p.title || '';
+  if (p.snippet && p.snippet.includes('<em>')) {
+    titleHtml = p.snippet;
+  }
+
+  return `
+    <div class="paper-card" onclick="switchPage('detail',${p.id})">
+      <div class="paper-icon ${iconClass}">${icon}</div>
+      <div class="paper-info">
+        <div class="paper-title">${titleHtml}</div>
+        <div class="paper-meta">
+          <span>${p.year || ''}</span>
+          <span>${p.province || ''}</span>
+          <span>${p.exam_tag || ''}</span>
+          ${p.question_count ? `<span>${p.question_count}题</span>` : ''}
+          ${p.source_name ? `<span>来源: ${p.source_name}</span>` : ''}
+        </div>
+      </div>
+      <div class="paper-badges">
+        <span class="badge blue">${typeBadge}</span>
+        ${verifiedBadge}${priorityBadge}${analysisBadge}
+      </div>
+    </div>
+  `;
+}
+
+function renderPagination(total, page) {
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const el = document.getElementById('pagination');
+  if (pages <= 1) { el.innerHTML = ''; return; }
+  let html = '';
+  html += `<button class="page-btn" ${page<=1?'disabled':''} onclick="searchPage=${page-1};searchPapers()">&laquo;</button>`;
+  const start = Math.max(1, page-2), end = Math.min(pages, page+2);
+  for (let i=start;i<=end;i++) {
+    html += `<button class="page-btn ${i===page?'active':''}" onclick="searchPage=${i};searchPapers()">${i}</button>`;
+  }
+  html += `<button class="page-btn" ${page>=pages?'disabled':''} onclick="searchPage=${page+1};searchPapers()">&raquo;</button>`;
+  el.innerHTML = html;
+}
+
+// ===== 仪表盘 =====
+async function loadDashboard() {
+  try {
+    const data = await api('/api/dashboard');
+    const s = document.getElementById('statsRow');
+    s.innerHTML = `
+      <div class="stat-card blue">
+        <div class="stat-icon">&#128196;</div>
+        <div class="stat-value">${data.total_papers}</div>
+        <div class="stat-label">试卷总数</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-icon">&#9989;</div>
+        <div class="stat-value">${data.verified_count || 0}</div>
+        <div class="stat-label">已验证</div>
+      </div>
+      <div class="stat-card orange">
+        <div class="stat-icon">&#127942;</div>
+        <div class="stat-value">${data.real_count}</div>
+        <div class="stat-label">高考真题</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="stat-icon">&#128202;</div>
+        <div class="stat-value">${data.analyzed_papers}</div>
+        <div class="stat-label">已分析</div>
+      </div>
+      <div class="stat-card teal">
+        <div class="stat-icon">&#11088;</div>
+        <div class="stat-value">${data.quality_questions}</div>
+        <div class="stat-label">优质题</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-icon">&#128214;</div>
+        <div class="stat-value">${data.official_docs_count || 0}</div>
+        <div class="stat-label">官方文件</div>
+      </div>
+    `;
+
+    const lp = document.getElementById('latestPapers');
+    if (data.latest_papers && data.latest_papers.length) {
+      lp.innerHTML = data.latest_papers.map(p => renderPaperCard(p)).join('');
+    } else {
+      lp.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128230;</div><div class="empty-text">暂无试卷</div><div class="empty-hint">前往采集站开始采集数据</div></div>';
+    }
+  } catch {}
+}
+
+// ===== 试卷详情 =====
+async function loadDetail(paperId) {
+  const el = document.getElementById('detailContent');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
+
+  try {
+    const data = await api(`/api/papers/${paperId}`);
+    const p = data.paper;
+    const typeLabels = {real:'高考真题',provincial:'省质检/省模拟',school:'名校联考',monthly:'月考/周考',special:'专项训练'};
+    const priorityLabel = data.source_priority_label || '';
+
+    // 地区校验结果
+    let regionHtml = '';
+    if (data.region_check) {
+      if (data.region_check.valid && !data.region_check.warnings?.length) {
+        regionHtml = `<div class="region-ok">&#9989; 地区校验通过</div>`;
+      } else {
+        const msgs = [...(data.region_check.errors||[]), ...(data.region_check.warnings||[])];
+        regionHtml = `<div class="region-warn">&#9888; ${msgs.join('; ') || '地区信息待验证'}</div>`;
+      }
+    }
+
+    el.innerHTML = `
+      <div class="detail-header">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+          <button class="nav-btn secondary" onclick="switchPage('papers')">&larr; 返回</button>
+        </div>
+        <div class="detail-title">${p.title}</div>
+        <div class="detail-meta">
+          <span>${typeLabels[p.paper_type] || p.paper_type}</span>
+          <span>${p.year}年</span>
+          ${p.province ? `<span>${p.province}</span>` : ''}
+          ${p.exam_tag ? `<span>${p.exam_tag}</span>` : ''}
+          ${p.school ? `<span>${p.school}</span>` : ''}
+          ${p.total_score ? `<span>满分 ${p.total_score}</span>` : ''}
+          ${p.difficulty ? `<span>难度 ${p.difficulty.toFixed(2)}</span>` : ''}
+          ${p.source_id ? `<span>来源: ${data.source?.name || p.source_id}</span>` : ''}
+          ${priorityLabel ? `<span>${priorityLabel}</span>` : ''}
+          ${p.verified ? '<span style="color:var(--apple-green)">&#9989; 已验证</span>' : '<span style="color:var(--apple-orange)">&#9888; 未验证</span>'}
+        </div>
+        ${regionHtml}
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button class="nav-btn primary" onclick="runIRT(${p.id})" ${p.analysis_status!=='pending'&&p.analysis_status!=='parsed'?'disabled':''}>IRT 分析</button>
+          <button class="nav-btn primary" onclick="runSimulate(${p.id})" ${p.analysis_status!=='irt_estimated'?'disabled':''}>成绩模拟</button>
+          <button class="nav-btn secondary" onclick="runCurriculum(${p.id})">课标分析</button>
+          <button class="nav-btn secondary" onclick="runQuality(${p.id})">质量评估</button>
+          <button class="nav-btn secondary" onclick="auditOnePaper(${p.id})">真实性审核</button>
+        </div>
+      </div>
+      <div class="section-header"><div class="section-title">题目列表 (${data.questions.length}题)</div></div>
+      <div class="question-list">
+        ${data.questions.map(q => `
+          <div class="question-card">
+            <div class="q-header">
+              <span class="q-num">第${q.q_number}题</span>
+              <span class="q-type">${{choice:'选择题',fill:'填空题',solve:'解答题'}[q.q_type]||q.q_type}</span>
+              <span class="q-score">${q.score}分</span>
+              ${q.quality_rating ? `<span class="badge ${q.quality_rating==='excellent'?'green':q.quality_rating==='good'?'blue':'gray'}">${q.quality_rating}</span>` : ''}
+              ${q.is_quality ? '<span class="badge green">优质题</span>' : ''}
+            </div>
+            <div class="q-content">${q.content || '（题目内容待录入）'}</div>
+            ${q.knowledge_points ? `<div class="q-kp">${JSON.parse(q.knowledge_points).map(k=>`<span class="kp-tag">${k}</span>`).join('')}</div>` : ''}
+            ${q.answer ? `<div style="margin-top:10px;font-size:13px;color:var(--apple-green)"><b>答案：</b>${q.answer}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+      ${data.analyses.length ? `
+        <div class="section-header" style="margin-top:28px"><div class="section-title">分析结果</div></div>
+        <div id="simQualityInfo"></div>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>成绩分布</h3><canvas id="distChart"></canvas></div>
+          <div class="chart-card"><h3>知识点覆盖</h3><canvas id="kpChart"></canvas></div>
+        </div>
+      ` : ''}
+    `;
+
+    if (data.analyses.length) {
+      setTimeout(() => renderCharts(data), 100);
+    }
+  } catch {}
+}
+
+function renderCharts(data) {
+  const analysis = data.analyses[data.analyses.length - 1];
+  if (!analysis) return;
+
+  const simJson = analysis.simulation_json ? JSON.parse(analysis.simulation_json) : null;
+  if (simJson && simJson.score_distribution) {
+    const ctx = document.getElementById('distChart')?.getContext('2d');
+    if (ctx) {
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: simJson.score_distribution.map(d => d.range),
+          datasets: [{
+            label: '人数占比 %',
+            data: simJson.score_distribution.map(d => d.percent),
+            backgroundColor: simJson.score_distribution.map((d, i) => {
+              const colors = ['rgba(255,59,48,0.6)','rgba(255,149,0,0.5)','rgba(255,204,0,0.5)','rgba(52,199,89,0.5)','rgba(0,122,255,0.5)','rgba(175,82,222,0.5)'];
+              return colors[Math.min(i, colors.length - 1)];
+            }),
+            borderRadius: 6,
+            borderSkipped: false,
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true } }
+        }
+      });
+    }
+  }
+
+  // v5.1: 显示模拟质量指标和偏度/峰度
+  if (simJson) {
+    const qualityEl = document.getElementById('simQualityInfo');
+    if (qualityEl && simJson.quality_metrics) {
+      const qm = simJson.quality_metrics;
+      const score = qm.quality_score || 0;
+      const scoreColor = score >= 80 ? 'var(--apple-green)' : score >= 60 ? 'var(--apple-orange)' : 'var(--apple-red)';
+      qualityEl.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-top:14px">
+          <div style="background:rgba(0,122,255,0.06);padding:14px;border-radius:12px;text-align:center">
+            <div style="font-size:12px;color:var(--text-2)">模拟质量评分</div>
+            <div style="font-size:28px;font-weight:800;color:${scoreColor}">${score}</div>
+          </div>
+          <div style="background:rgba(0,122,255,0.06);padding:14px;border-radius:12px;text-align:center">
+            <div style="font-size:12px;color:var(--text-2)">成绩偏度</div>
+            <div style="font-size:28px;font-weight:800;color:var(--text-1)">${simJson.skewness || '—'}</div>
+          </div>
+          <div style="background:rgba(0,122,255,0.06);padding:14px;border-radius:12px;text-align:center">
+            <div style="font-size:12px;color:var(--text-2)">成绩峰度</div>
+            <div style="font-size:28px;font-weight:800;color:var(--text-1)">${simJson.kurtosis || '—'}</div>
+          </div>
+          <div style="background:rgba(0,122,255,0.06);padding:14px;border-radius:12px;text-align:center">
+            <div style="font-size:12px;color:var(--text-2)">均值偏差</div>
+            <div style="font-size:28px;font-weight:800;color:var(--apple-green)">${qm.mean_error_pct || 0}%</div>
+          </div>
+        </div>
+      `;
+    }
+  }
+}
+
+// ===== 分析操作 =====
+async function runIRT(paperId) {
+  showToast('开始 IRT 参数估计...', 'info');
+  try {
+    const data = await api(`/api/papers/${paperId}/estimate-irt`, {method:'POST'});
+    showToast(`IRT 估计完成，${data.estimated} 道题`, 'success');
+    loadDetail(paperId);
+  } catch {}
+}
+async function runSimulate(paperId) {
+  showToast('开始成绩模拟（已校准至官方数据）...', 'info');
+  try {
+    const data = await api(`/api/papers/${paperId}/simulate`, {method:'POST'});
+    showToast(`模拟完成，均分 ${data.mean}`, 'success');
+    loadDetail(paperId);
+  } catch {}
+}
+async function runCurriculum(paperId) {
+  showToast('开始课标分析...', 'info');
+  try {
+    const data = await api(`/api/papers/${paperId}/curriculum-analysis`, {method:'POST'});
+    showToast(`课标契合度: ${data.curriculum_score?.toFixed(1) || '完成'}`, 'success');
+    loadDetail(paperId);
+  } catch {}
+}
+async function runQuality(paperId) {
+  showToast('开始质量评估...', 'info');
+  try {
+    const data = await api(`/api/papers/${paperId}/quality-analysis`, {method:'POST'});
+    showToast(`质量评分: ${data.overall_score?.toFixed(1) || '完成'}`, 'success');
+    loadDetail(paperId);
+  } catch {}
+}
+async function auditOnePaper(paperId) {
+  showToast('开始真实性审核...', 'info');
+  try {
+    const data = await api(`/api/audit/paper/${paperId}`, {method:'POST'});
+    showToast(`审核完成: ${data.grade}级 (${data.score}分)`, data.score>=75?'success':'error');
+  } catch {}
+}
+
+// ===== 采集 =====
+async function startCollect() {
+  const year = document.getElementById('collectYear').value;
+  const subject = document.getElementById('collectSubject').value;
+  const keyword = document.getElementById('collectKeyword').value;
+
+  let params = new URLSearchParams({year});
+  if (subject) params.set('subjects', subject);
+  if (keyword) params.set('keyword', keyword);
+
+  showToast('开始采集...', 'info');
+  try {
+    const data = await api(`/api/scrape/collect?${params}`, {method:'POST'});
+    showToast(`采集完成：发现 ${data.found} 份，保存 ${data.saved} 份，跳过重复 ${data.skipped_duplicates} 份`, 'success');
+    loadCollectStatus();
+  } catch {}
+}
+
+async function loadCollectStatus() {
+  try {
+    const data = await api('/api/scrape/status');
+    const cs = document.getElementById('collectStats');
+    cs.innerHTML = `
+      <div class="stat-card blue"><div class="stat-icon">&#128196;</div><div class="stat-value">${data.total_papers}</div><div class="stat-label">试卷总数</div></div>
+      <div class="stat-card green"><div class="stat-icon">&#9989;</div><div class="stat-value">${data.dedup_stats?.unique||0}</div><div class="stat-label">唯一试卷</div></div>
+      <div class="stat-card orange"><div class="stat-icon">&#9888;</div><div class="stat-value">${data.dedup_stats?.suspected||0}</div><div class="stat-label">疑似重复</div></div>
+      <div class="stat-card red"><div class="stat-icon">&#128272;</div><div class="stat-value">${data.dedup_stats?.duplicate||0}</div><div class="stat-label">已去重</div></div>
+    `;
+
+    // 自动采集状态
+    const as = document.getElementById('autoScraperStatus');
+    if (data.auto_scraper_status) {
+      const s = data.auto_scraper_status;
+      as.innerHTML = `
+        <div class="doc-card" style="margin-bottom:12px">
+          <div class="doc-icon" style="background:${s.running?'rgba(52,199,89,0.1)':'rgba(255,45,85,0.1)'}">${s.running?'&#9203;':'&#9208;'}</div>
+          <div>
+            <div class="doc-title">自动采集 ${s.running?'运行中':'已停止'}</div>
+            <div class="doc-meta">间隔: ${s.interval_minutes}分钟 | 已运行: ${s.run_count}次 | 上次: ${s.last_run||'无'}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    const logs = document.getElementById('scrapeLogs');
+    if (data.recent_logs && data.recent_logs.length) {
+      logs.innerHTML = `
+        <table class="log-table">
+          <thead><tr><th>来源</th><th>URL</th><th>状态</th><th>去重</th><th>时间</th></tr></thead>
+          <tbody>
+            ${data.recent_logs.slice(0,20).map(l => `
+              <tr>
+                <td>${l.source_id||'-'}</td>
+                <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis">${l.url||'-'}</td>
+                <td><span class="badge ${l.status==='success'||l.status==='auto_collected'?'green':l.status==='skipped'?'orange':'red'}">${l.status}</span></td>
+                <td>${l.dedup_result||'-'}</td>
+                <td>${l.created_at||'-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    } else {
+      logs.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128203;</div><div class="empty-text">暂无采集日志</div></div>';
+    }
+  } catch {}
+}
+
+// ===== 官方文件库 =====
+async function loadDocs() {
+  const keyword = document.getElementById('docKeyword').value;
+  const category = document.getElementById('docCategory').value;
+
+  let params = new URLSearchParams({page:1, size:50});
+  if (keyword) params.set('keyword', keyword);
+  if (category) params.set('category', category);
+
+  try {
+    const data = await api(`/api/official-docs?${params}`);
+    const list = document.getElementById('docsList');
+    if (!data.data.length) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128214;</div><div class="empty-text">暂无官方文件</div></div>';
+    } else {
+      const catLabels = {policy:'政策文件',exam_notice:'考试公告',curriculum:'课程标准',scoring:'评分标准',analysis:'考情分析',reform:'新高考改革'};
+      list.innerHTML = data.data.map(d => `
+        <div class="doc-card">
+          <div class="doc-icon">&#128196;</div>
+          <div style="flex:1">
+            <div class="doc-title">${d.title}</div>
+            <div class="doc-meta">
+              <span class="badge blue">${catLabels[d.category]||d.category}</span>
+              <span>${d.source||''}</span>
+              <span>${d.year||''}</span>
+              <span class="badge ${d.priority==='S'?'green':'gray'}">${d.priority}级</span>
+            </div>
+            ${d.summary ? `<div style="margin-top:8px;font-size:13px;color:var(--text-2)">${d.summary}</div>` : ''}
+            ${d.source_url ? `<a href="${d.source_url}" target="_blank" style="font-size:12px;color:var(--apple-blue);margin-top:4px;display:inline-block">查看原文 &rarr;</a>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+  } catch {}
+}
+
+async function refreshDocs() {
+  showToast('正在从官方源刷新文件库...', 'info');
+  try {
+    const data = await api('/api/official-docs/refresh', {method:'POST'});
+    showToast(`刷新完成: 发现 ${data.found} 篇, 新增 ${data.added} 篇`, 'success');
+    loadDocs();
+  } catch {}
+}
+
+// ===== 真实性审核 =====
+async function loadAuditPage() {
+  try {
+    const data = await api('/api/audit/summary');
+    const s = document.getElementById('auditStats');
+    s.innerHTML = `
+      <div class="stat-card blue"><div class="stat-icon">&#128196;</div><div class="stat-value">${data.total_papers}</div><div class="stat-label">试卷总数</div></div>
+      <div class="stat-card green"><div class="stat-icon">&#9989;</div><div class="stat-value">${data.verified_papers}</div><div class="stat-label">已验证</div></div>
+      <div class="stat-card orange"><div class="stat-icon">&#9888;</div><div class="stat-value">${data.unverified_papers}</div><div class="stat-label">未验证</div></div>
+    `;
+  } catch {}
+}
+
+async function runBatchAudit() {
+  showToast('开始批量审核...', 'info');
+  try {
+    const data = await api('/api/audit/batch?limit=50', {method:'POST'});
+    showToast(`审核完成: ${data.total_audited} 份 (A:${data.grade_distribution.A||0} B:${data.grade_distribution.B||0} C:${data.grade_distribution.C||0} D:${data.grade_distribution.D||0})`, 'success');
+    loadAuditPage();
+  } catch {}
+}
+
+// ===== 初始化 =====
+async function init() {
+  try {
+    const filters = await api('/api/filters');
+    const subjectSel = document.getElementById('filterSubject');
+    const collectSubj = document.getElementById('collectSubject');
+    Object.entries(filters.paper_types || {}).forEach(([k,v]) => {
+      document.getElementById('filterType').innerHTML += `<option value="${k}">${v}</option>`;
+    });
+    (filters.years || []).forEach(y => {
+      document.getElementById('filterYear').innerHTML += `<option value="${y}">${y}年</option>`;
+    });
+
+    // 省份筛选
+    (filters.provinces || []).forEach(p => {
+      document.getElementById('filterProvince').innerHTML += `<option value="${p}">${p}</option>`;
+    });
+
+    // 考试标签筛选
+    const examTags = ["一模","二模","三模","省质检","联考","月考","适应性考试","省统考"];
+    examTags.forEach(t => {
+      document.getElementById('filterExamTag').innerHTML += `<option value="${t}">${t}</option>`;
+    });
+
+    const sidebar = document.getElementById('subjectSidebar');
+    (filters.subjects || []).forEach(s => {
+      subjectSel.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+      collectSubj.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+      sidebar.innerHTML += `
+        <div class="sidebar-item" onclick="currentSubject='${s.id}';switchPage('papers')">
+          <div class="dot" style="background:var(--apple-blue)"></div>${s.name}
+        </div>
+      `;
+    });
+
+    // 官方文件分类
+    try {
+      const cats = await api('/api/official-docs/categories');
+      const catSel = document.getElementById('docCategory');
+      (cats || []).forEach(c => {
+        catSel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+      });
+    } catch {}
+  } catch {}
+
+  loadDashboard();
+}
+
+init();
+</script>
+</body>
+</html>
