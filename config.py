@@ -539,8 +539,8 @@ SCRAPER_NETWORK = {
 
 # --- 试卷分析配置 ---
 ANALYSIS_CONFIG = {
-    "n_simulation_students": 20000,   # 单卷模拟考生数（可调；权衡速度与精度）
-    "irt_virtual_students": 3000,     # IRT 参数估计用的虚拟考生数
+    "n_simulation_students": 50000,   # 单卷模拟考生数（商用建议 50000；可调；权衡速度与精度）
+    "irt_virtual_students": 5000,     # IRT 参数估计用的虚拟考生数（商用建议 5000）
     "max_workers": 4,                 # 批量并行 worker（线程池，numpy 释放 GIL）
     "executor": "thread",             # thread | process
     "use_cache": True,                # 缓存 IRT 拟合 / 知识点映射，避免重复计算

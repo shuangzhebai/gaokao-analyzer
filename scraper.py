@@ -681,7 +681,7 @@ class ScraperManager:
 
         # 落库前去重：标记 dedup_status（容错：失败则视为 unique）
         try:
-            content_hash = self._content_hash(item, adapter)
+            content_hash = self._content_hash(item, adapter, paper.questions)
             paper.content_hash = content_hash
             dedup_result = await self.dedup.check_duplicate(
                 title=paper.title or item.get("title", ""),
@@ -697,13 +697,16 @@ class ScraperManager:
         return paper
 
     @staticmethod
-    def _content_hash(item: Dict[str, Any], adapter: BaseSourceAdapter) -> str:
-        """轻量内容哈希（标题 + url + 源），用于查重，避免拉全库。"""
+    def _content_hash(item: Dict[str, Any], adapter: BaseSourceAdapter,
+                      questions: Optional[List[ExtractedQuestion]] = None) -> str:
+        """内容哈希（标题 + url + 源 + 首题内容片段），用于查重，降低碰撞率。"""
         raw = "|".join([
             str(item.get("title", "")),
             str(item.get("url", "")),
             adapter.source_id,
         ])
+        if questions:
+            raw += "|" + questions[0].content[:100]
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
 
     async def close(self) -> None:

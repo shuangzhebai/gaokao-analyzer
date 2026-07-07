@@ -219,6 +219,10 @@ class AutoScraper:
     def __init__(self, deepseek_api_key: str = ""):
         self.config = AUTO_SCRAPER_CONFIG
         self.api_key = deepseek_api_key
+
+    def __repr__(self):
+        masked = self.api_key[:4] + "****" if self.api_key else "None"
+        return f"AutoScraper(api_key={masked})"
         self._running = False
         self._task = None
         self._last_run = None
