@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from config import DATA_DIR, get_deepseek_key
-from models import init_db, seed_data
+from models import init_db, optimize_fts, seed_data
 from scraper import ScraperManager
 from parser import PaperParser
 from analyzer import IRTModel, KnowledgeMapper, QualityAnalyzer
@@ -59,6 +59,7 @@ def create_lifespan():
         os.makedirs(DATA_DIR, exist_ok=True)
         await init_db()       # 含版本化迁移（T01），不删库
         await seed_data()
+        await optimize_fts()  # P-6：启动时优化 FTS5 索引碎片
 
         # ======== 引擎初始化并行化（P-2） ========
         # 阶段一：所有同步构造引擎并行初始化
