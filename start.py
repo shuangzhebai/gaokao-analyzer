@@ -1,7 +1,8 @@
 """
-高考模拟卷智能分析系统 v5.0 - 一键启动脚本
-支持 --reset 强制重建数据库
-v5.0: 地区校验 + 自动采集 + 官方文件库 + 真实性审核 + 校准评价
+高考模拟卷智能分析系统 v5.1 - 一键启动脚本
+支持 --reset 强制重建数据库（显式删库，用户意图）
+支持 --install-deps 显式安装依赖（默认不再每次启动都 pip install，R-5）
+v5.1: schema 升级改为版本化迁移（见 models.run_migrations），绝不自动删库（T01）
 """
 import asyncio
 import os
@@ -16,9 +17,9 @@ from config import DB_PATH
 
 
 def install_deps():
-    """安装依赖"""
+    """安装依赖（仅在显式 --install-deps 时调用，R-5）"""
     print("=" * 60)
-    print("检查/安装依赖包...")
+    print("安装依赖包...")
     print("=" * 60)
     req_file = os.path.join(BASE_DIR, "requirements.txt")
     subprocess.check_call(
@@ -32,11 +33,11 @@ def generate_sample(force=False):
     """生成1000份试卷数据
 
     Args:
-        force: 强制重建数据库（忽略已有数据）
+        force: 强制重建数据库（--reset，显式删库；仅此情形删库）
     """
     if force and os.path.exists(DB_PATH):
         os.remove(DB_PATH)
-        print("强制重建：已删除旧数据库")
+        print("强制重建(--reset)：已删除旧数据库")
 
     if not force and os.path.exists(DB_PATH):
         try:
@@ -45,32 +46,17 @@ def generate_sample(force=False):
             tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
             if "papers" in tables:
                 count = conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
-                cols = [r[1] for r in conn.execute("PRAGMA table_info(papers)").fetchall()]
-                needs_migration = "content_hash" not in cols
-                if needs_migration:
-                    print("检测到旧版数据库，需要升级 schema...")
-                    conn.close()
-                    os.remove(DB_PATH)
-                    print("已删除旧数据库，将重新创建...")
-                # v5.0: 检查新表是否存在
-                elif "official_docs" not in tables or "verification_audit" not in tables:
-                    print("检测到 v4.x 数据库，需要升级到 v5.0 schema...")
-                    conn.close()
-                    # 不删库，仅追加新表（init_db 使用 CREATE IF NOT EXISTS）
-                    print("将追加 v5.0 新表（official_docs, verification_audit）...")
-                    # 不需要重新生成数据，直接返回
-                    return
-                elif count >= 1000:
+                # v5.1(T01): 不再因 schema 差异删库，交由 init_db 的版本化迁移处理
+                if count >= 1000:
                     conn.close()
                     print(f"数据库已有 {count} 份试卷，跳过生成。")
                     return
-            conn.close()
+                conn.close()
+                print(f"数据库现有 {count} 份试卷，将执行版本化迁移并补生成数据（不删库）。")
+            else:
+                conn.close()
         except Exception as e:
-            print(f"数据库检查异常: {e}，将重新生成...")
-            try:
-                os.remove(DB_PATH)
-            except Exception:
-                pass
+            print(f"数据库检查异常: {e}，将尝试迁移/重建")
 
     print("=" * 60)
     print("生成1000份试卷数据库 (800模拟+200真题)...")
@@ -84,10 +70,11 @@ def generate_sample(force=False):
 def start_server():
     """启动 Web 服务"""
     print("=" * 60)
-    print("启动高考模拟卷智能分析系统 v5.0")
+    print("启动高考模拟卷智能分析系统 v5.1")
     print("=" * 60)
     print("访问地址: http://127.0.0.1:8899")
-    print("v5.0 新特性: 地区校验 | 自动采集 | 官方文件库 | 真实性审核 | 校准评价")
+    print("v5.1 新特性: 版本化迁移(防清空) | 地区校验 | 自动采集(默认关闭) | "
+          "官方文件库 | 真实性审核 | 校准评价 | 中文搜索相关度修复")
     print("按 Ctrl+C 停止服务")
     print("=" * 60)
     print()
@@ -102,8 +89,10 @@ def start_server():
 
 
 if __name__ == "__main__":
-    # 支持 --reset 参数强制重建数据库
+    # 支持 --reset 强制重建数据库；--install-deps 显式安装依赖
     force_reset = "--reset" in sys.argv
-    install_deps()
+    install_deps_flag = "--install-deps" in sys.argv
+    if install_deps_flag:
+        install_deps()
     generate_sample(force=force_reset)
     start_server()

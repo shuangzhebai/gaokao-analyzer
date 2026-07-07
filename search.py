@@ -1,13 +1,14 @@
 """
 全文搜索引擎 v5.1 - 基于 SQLite FTS5
 支持：关键词搜索、多维度筛选、相关度排序、搜索建议
-v5.1: 增强中文分词搜索、多关键词 AND/OR、模糊匹配
+v5.1: 增强中文分词搜索、多关键词 AND/OR、模糊匹配；统一分词器(tokenizer)；
+      修复相关度排序(B-1)；导出 search_similar_titles 供查重复用降级策略(B-3)
 """
-import re
 import logging
 from typing import Optional
 
 from models import get_db
+from tokenizer import tokenize
 
 logger = logging.getLogger("gaokao")
 
@@ -21,55 +22,6 @@ class SearchEngine:
             "physics": "物理", "chemistry": "化学", "biology": "生物",
             "history": "历史", "geography": "地理", "politics": "政治",
         }
-
-    @staticmethod
-    def _tokenize_chinese(q: str) -> list:
-        """
-        中文智能分词：按空格/标点分割，并自动切分连续中文字符为 2-4 字词组
-        例: "深圳二模数学" → ["深圳", "二模", "数学"]
-        """
-        # 先按空格/标点切分
-        raw_tokens = re.split(r'[\s,，。、；;：:！!？?（）()（）【】\[\]{}]+', q.strip())
-        tokens = []
-        for t in raw_tokens:
-            if not t:
-                continue
-            # 英文/数字直接保留
-            if re.match(r'^[\w\d]+$', t) and not re.search(r'[\u4e00-\u9fff]', t):
-                tokens.append(t)
-                continue
-            # 中文: 按常见考试关键词模式切分
-            # 匹配 "XX一模/二模/三模/省质检/联考" 等模式
-            exam_patterns = [
-                r'深圳', '广州', '南京', '杭州', '长沙', '武汉', '成都',
-                '北京', '上海', '天津', '重庆', '福州', '厦门', '济南', '青岛',
-                '郑州', '合肥', '西安', '南昌',
-                '一模', '二模', '三模', '四模',
-                '省质检', '省统考', '联考', '月考', '期末', '期中',
-                '适应性', '模拟', '真题',
-                '数学', '语文', '英语', '物理', '化学', '生物', '历史', '地理', '政治',
-                '附中', '中学', '一中', '二中', '三中', '外国语', '实验',
-                '百校', '名校', '九校', '八校', '十校',
-                'T8', '华大', '天一', '衡水', '黄冈', '镇海',
-                '学军', '长郡', '雅礼', '南外', '人大',
-                '高考', '中考', '期末', '入学',
-            ]
-            remaining = t
-            for pattern in exam_patterns:
-                if pattern in remaining:
-                    tokens.append(pattern)
-                    remaining = remaining.replace(pattern, '', 1)
-            # 剩余部分: 切分为 2-4 字词组
-            if remaining:
-                if len(remaining) <= 4:
-                    tokens.append(remaining)
-                else:
-                    # 按 2 字切分（中文常用词长度）
-                    for i in range(0, len(remaining), 2):
-                        chunk = remaining[i:i+2]
-                        if chunk:
-                            tokens.append(chunk)
-        return [t for t in tokens if len(t) >= 1]
 
     async def search(
         self,
@@ -114,8 +66,8 @@ class SearchEngine:
 
             # FTS5 全文搜索
             if q and q.strip():
-                # v5.1: 中文分词 + 多关键词 AND 搜索
-                tokens = self._tokenize_chinese(q.strip())
+                # v5.1: 中文分词 + 多关键词 AND 搜索（统一使用 tokenizer 模块）
+                tokens = tokenize(q.strip())
                 if not tokens:
                     return {"total": 0, "page": page, "size": size, "query": q, "data": []}
 
@@ -211,11 +163,15 @@ class SearchEngine:
                     END, p.created_at DESC
                 """
             else:
-                # relevance: 使用 FTS rank 排序或默认时间排序
+                # relevance: 按 FTS 命中顺序（即 rank 顺序）排序，未被命中的排在之后
                 if matched_ids:
-                    # 按 FTS 匹配的 ID 顺序排序（FTS 已经按 rank 排好）
-                    id_order = ",".join(str(mid) for mid in matched_ids)
-                    order = f"CASE p.id WHEN {id_order} THEN 0 ELSE 1 END, p.created_at DESC"
+                    # 为命中 id 分配递增权重(0,1,2,...)，保持 FTS 相关度顺序；
+                    # 非命中 id 用比最大位置更大的值，确保全部排在命中集之后。
+                    when_clauses = " ".join(
+                        f"WHEN {mid} THEN {i}" for i, mid in enumerate(matched_ids)
+                    )
+                    sentinel = len(matched_ids) + 1
+                    order = f"CASE p.id {when_clauses} ELSE {sentinel} END"
                 else:
                     order = "p.created_at DESC"
 
@@ -279,8 +235,8 @@ class SearchEngine:
                 if rows:
                     return [r["title"] for r in rows]
 
-                # 短语无结果，尝试分词 AND 匹配
-                tokens = self._tokenize_chinese(clean_q)
+                # 短语无结果，尝试分词 AND 匹配（统一使用 tokenizer 模块）
+                tokens = tokenize(clean_q)
                 if len(tokens) >= 2:
                     and_query = ' AND '.join(f'"{t}"' for t in tokens if len(t) >= 2)
                     if and_query:
@@ -299,7 +255,7 @@ class SearchEngine:
                     [f"%{q.strip()}%", limit],
                 )
                 return [r["title"] for r in rows]
-            except Exception:
+            except Exception:  # noqa: BLE001
                 rows = await db.execute_fetchall(
                     "SELECT DISTINCT title FROM papers WHERE title LIKE ? LIMIT ?",
                     [f"%{q.strip()}%", limit],
@@ -366,3 +322,71 @@ class SearchEngine:
                 "query": q,
                 "data": rows,
             }
+
+
+async def search_similar_titles(db, title: str, subject_id: str, limit: int = 5) -> list:
+    """共享：基于中文分词 + AND→OR→LIKE 降级，查询相似标题（供搜索与查重复用，B-3）。
+
+    Args:
+        db: aiosqlite 连接
+        title: 待查重标题
+        subject_id: 科目 ID（限定同科目，避免跨科误判）
+        limit: 返回候选数量
+
+    Returns:
+        [{"id": int, "title": str, "year": int}, ...]（已按相关度排序）
+    """
+    tokens = tokenize(title)
+    if not tokens:
+        return []
+
+    clean_title = title.strip().replace('"', '""')
+    sql = """
+        SELECT p.id, p.title, p.year
+        FROM papers_fts pf
+        JOIN papers p ON pf.rowid = p.id
+        WHERE papers_fts MATCH ? AND p.subject_id = ?
+        ORDER BY pf.rank
+        LIMIT ?
+    """
+
+    rows = []
+    # 1) 短语匹配
+    try:
+        rows = await db.execute_fetchall(sql, [f'"{clean_title}"', subject_id, limit])
+    except Exception:  # noqa: BLE001
+        rows = []
+    # 2) 多关键词 AND
+    if not rows and len(tokens) > 1:
+        and_query = ' AND '.join(f'"{t}"' for t in tokens if len(t) >= 2)
+        if and_query:
+            try:
+                rows = await db.execute_fetchall(sql, [and_query, subject_id, limit])
+            except Exception:  # noqa: BLE001
+                rows = []
+    # 3) 多关键词 OR
+    if not rows and len(tokens) > 1:
+        or_query = ' OR '.join(f'"{t}"' for t in tokens if len(t) >= 2)
+        if or_query:
+            try:
+                rows = await db.execute_fetchall(sql, [or_query, subject_id, limit])
+            except Exception:  # noqa: BLE001
+                rows = []
+    # 4) LIKE 降级（逐 token）
+    if not rows:
+        conditions = []
+        params: list = [subject_id]
+        for t in tokens:
+            conditions.append("p.title LIKE ?")
+            params.append(f"%{t}%")
+        like_sql = (
+            "SELECT p.id, p.title, p.year FROM papers p "
+            f"WHERE p.subject_id = ? AND {' AND '.join(conditions)} LIMIT ?"
+        )
+        params.append(limit)
+        try:
+            rows = await db.execute_fetchall(like_sql, params)
+        except Exception:  # noqa: BLE001
+            rows = []
+
+    return [{"id": r["id"], "title": r["title"], "year": r["year"]} for r in rows]

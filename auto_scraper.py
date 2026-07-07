@@ -9,7 +9,7 @@ import logging
 import time
 from datetime import datetime
 from typing import Optional
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 
 import httpx
 from bs4 import BeautifulSoup
@@ -415,7 +415,6 @@ class AutoScraper:
                         if not href or not title:
                             continue
 
-                        from urllib.parse import urljoin
                         full_url = urljoin(url, href)
 
                         if subject_name not in title and "高考" not in title:

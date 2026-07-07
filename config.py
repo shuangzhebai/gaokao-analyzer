@@ -1,6 +1,6 @@
 """
-高考模拟卷智能分析系统 v5.0 - 配置文件
-v5.0: 地区层级映射、自动采集调度、官方文档源、校准数据
+高考模拟卷智能分析系统 v5.1 - 配置文件
+v5.1: 地区层级映射、自动采集调度、官方文档源、校准数据
 """
 import os
 
@@ -8,6 +8,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 DOWNLOAD_DIR = os.path.join(DATA_DIR, "downloads")
 DB_PATH = os.path.join(DATA_DIR, "gaokao.db")
+
+# 统一版本常量：消除 app.py/overview 版本标识混乱（Q-8）
+VERSION = "5.1"
 
 # 科目配置
 SUBJECTS = {
@@ -158,8 +161,9 @@ SOURCES = {
 
 # ===== v5.0 自动采集调度配置 =====
 AUTO_SCRAPER_CONFIG = {
-    "enabled": True,
-    "interval_minutes": 30,  # 每30分钟自动采集一次
+    # v5.1(T05): 默认关闭自动采集，避免后台高负载/被封；如需开启请在配置中置 True
+    "enabled": False,
+    "interval_minutes": 30,  # 每30分钟自动采集一次（开启时生效）
     "subjects": ["math", "chinese", "english", "physics", "chemistry", "biology", "history", "geography", "politics"],
     "year_range": [2025, 2026],
     "cross_verify_sources": 3,  # 交叉验证至少需要3个来源确认
@@ -361,13 +365,22 @@ CORE_COMPETENCIES = {
 }
 
 # DeepSeek 查重配置
+# v5.1(T04): api_key 改为惰性读取（get_deepseek_key），运行时设置环境变量即生效，无需重启导入
 DEEPSEEK_CONFIG = {
-    "api_key": os.environ.get("DEEPSEEK_API_KEY", ""),
     "api_url": "https://api.deepseek.com/v1/chat/completions",
     "model": "deepseek-chat",
     "rate_limit_per_minute": 10,
     "timeout": 30,
 }
+
+
+def get_deepseek_key() -> str:
+    """惰性读取 DeepSeek API Key。
+
+    在配置导入期不再固定读取环境变量，运行时（含 lifespan 启动、请求处理中）
+    调用本函数读取，设置/修改 DEEPSEEK_API_KEY 环境变量后无需重启进程即可生效。
+    """
+    return os.environ.get("DEEPSEEK_API_KEY", "")
 
 # 来源可信度映射
 SOURCE_PRIORITY_MAP = {

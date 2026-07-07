@@ -1,15 +1,109 @@
 """
-数据库模型 v5.0 - SQLite + aiosqlite + FTS5
-v5.0: 新增 official_docs、verification_audit 表
+数据库模型 v5.1 - SQLite + aiosqlite + FTS5
+v5.1: 新增 official_docs、verification_audit 表；引入 schema_migrations 版本化迁移
 """
 import aiosqlite
+import logging
+
 from config import DB_PATH
+
+logger = logging.getLogger("gaokao")
+
+
+# ============ 版本化迁移（T01：防清空数据） ============
+
+# 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
+CURRENT_SCHEMA_VERSION = 1
+
+
+async def _ensure_schema_migrations(db) -> None:
+    """确保迁移记录表存在。"""
+    await db.execute(
+        """CREATE TABLE IF NOT EXISTS schema_migrations (
+               version INTEGER PRIMARY KEY,
+               applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+               description TEXT
+           )"""
+    )
+
+
+async def _get_applied_version(db) -> int:
+    """读取已应用的最高 schema 版本（无记录返回 0）。"""
+    try:
+        row = await db.execute_fetchone("SELECT MAX(version) AS v FROM schema_migrations")
+        return int(row["v"]) if row and row["v"] is not None else 0
+    except Exception:  # noqa: BLE001
+        return 0
+
+
+async def _add_column_if_missing(db, table: str, column: str, definition: str) -> None:
+    """若表中缺少某列，则增量 ALTER 添加（幂等，不删库、不丢数据）。"""
+    cols = [r[1] for r in (await db.execute(f"PRAGMA table_info({table})")).fetchall()]
+    if column not in cols:
+        await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+async def _migrate_to_v1(db) -> None:
+    """基线迁移 v1（v5.1）。
+
+    对已有旧版（v4.x）数据库补齐 v5.x 新增列；新库已由 SCHEMA 的
+    CREATE IF NOT EXISTS 直接建好，此处为幂等补齐，不会清空任何数据。
+    """
+    # papers 表 v5.x 新增列
+    await _add_column_if_missing(db, "papers", "content_hash", "TEXT")
+    await _add_column_if_missing(db, "papers", "duplicate_of", "INTEGER")
+    await _add_column_if_missing(db, "papers", "dedup_status", "TEXT DEFAULT 'unique'")
+    await _add_column_if_missing(db, "papers", "source_priority", "TEXT DEFAULT 'B'")
+    await _add_column_if_missing(db, "papers", "collected_at", "TIMESTAMP")
+    await _add_column_if_missing(db, "papers", "collector", "TEXT DEFAULT 'system'")
+    await _add_column_if_missing(db, "papers", "verified", "INTEGER DEFAULT 0")
+    await _add_column_if_missing(db, "papers", "question_count", "INTEGER DEFAULT 0")
+    await _add_column_if_missing(db, "papers", "explanation", "TEXT")
+    await _add_column_if_missing(db, "papers", "difficulty_tag", "TEXT")
+    # questions 表 v5.x 新增列
+    await _add_column_if_missing(db, "questions", "content_hash", "TEXT")
+    await _add_column_if_missing(db, "questions", "similar_to", "INTEGER")
+
+
+# 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
+MIGRATIONS = {
+    1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
+}
+
+
+async def run_migrations(db) -> None:
+    """按版本号增量应用迁移，绝不删除数据库。
+
+    迁移失败会抛出 RuntimeError 并提示用户手动备份重建（而非自动清库）。
+    """
+    await _ensure_schema_migrations(db)
+    current = await _get_applied_version(db)
+    if current >= CURRENT_SCHEMA_VERSION:
+        return
+    for ver in range(current + 1, CURRENT_SCHEMA_VERSION + 1):
+        desc, fn = MIGRATIONS.get(ver, (f"migration to v{ver}", None))
+        try:
+            if fn is not None:
+                await fn(db)
+            await db.execute(
+                "INSERT OR REPLACE INTO schema_migrations (version, description) VALUES (?, ?)",
+                (ver, desc),
+            )
+            await db.commit()
+            logger.info(f"DB migration applied: v{ver} - {desc}")
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"DB migration v{ver} failed: {e}")
+            raise RuntimeError(
+                f"数据库 schema 迁移失败 (目标 v{ver}): {e}。"
+                f"请先备份 data/gaokao.db，再手动重建；不要使用 --reset 以免数据清空。"
+            ) from e
 
 
 async def init_db():
-    """初始化所有数据表 + FTS5 索引"""
+    """初始化所有数据表 + FTS5 索引 + 版本化迁移"""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
+        await run_migrations(db)
         await db.commit()
 
 
@@ -311,6 +405,13 @@ CREATE INDEX IF NOT EXISTS idx_official_docs_source ON official_docs(source);
 CREATE INDEX IF NOT EXISTS idx_official_docs_year ON official_docs(year);
 CREATE INDEX IF NOT EXISTS idx_verification_paper ON verification_audit(paper_id);
 CREATE INDEX IF NOT EXISTS idx_verification_grade ON verification_audit(grade);
+
+-- v5.1: 版本化迁移记录表（防清空数据，增量 ALTER 不删库）
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    description TEXT
+);
 """
 
 

@@ -1,8 +1,9 @@
 """
-查重引擎 v4.0 - 三级查重策略
+查重引擎 v5.1 - 三级查重策略
 Level 1: content_hash 快速比对 (O(1))
-Level 2: FTS5 标题相似搜索 (O(log n))
+Level 2: FTS5 标题相似搜索 (O(log n)) —— 复用 search.search_similar_titles 的 AND→OR→LIKE 降级
 Level 3: DeepSeek API 语义相似度 (按需调用)
+v5.1: 统一分词/查重降级策略(B-3)，_fts_check 与 search 保持一致
 """
 import hashlib
 import json
@@ -13,6 +14,7 @@ from typing import Optional
 import httpx
 
 from models import get_db
+from search import search_similar_titles
 
 logger = logging.getLogger("gaokao")
 
@@ -61,7 +63,7 @@ class DedupEngine:
         if hash_result["status"] == "duplicate":
             return hash_result
 
-        # Level 2: FTS5 标题搜索
+        # Level 2: FTS5 标题搜索（与 search 一致的降级策略）
         fts_result = await self._fts_check(title, subject_id, year)
         if not fts_result["similar_papers"]:
             return {"status": "unique", "similar_papers": [], "content_hash": content_hash}
@@ -117,34 +119,15 @@ class DedupEngine:
             return {"status": "unique", "similar_papers": [], "content_hash": content_hash}
 
     async def _fts_check(self, title: str, subject_id: str, year: int) -> dict:
-        """Level 2: FTS5 标题相似搜索"""
-        async for db in get_db():
-            # 提取标题关键词
-            keywords = self._extract_keywords(title)
-            if not keywords:
-                return {"status": "unique", "similar_papers": [], "content_hash": ""}
+        """Level 2: FTS5 标题相似搜索。
 
-            # 用关键词搜索相似标题
-            clean_kw = " ".join(keywords).replace('"', '""')
-            try:
-                rows = await db.execute_fetchall(
-                    """SELECT p.id, p.title, p.year
-                       FROM papers_fts pf
-                       JOIN papers p ON pf.rowid = p.id
-                       WHERE papers_fts MATCH ? AND p.subject_id = ?
-                       ORDER BY pf.rank
-                       LIMIT 5""",
-                    [f'"{clean_kw}"', subject_id],
-                )
-            except Exception:
-                # FTS5 查询失败，降级到 LIKE
-                kw_like = f"%{'%'.join(keywords)}%"
-                rows = await db.execute_fetchall(
-                    """SELECT id, title, year FROM papers
-                       WHERE title LIKE ? AND subject_id = ?
-                       LIMIT 5""",
-                    [kw_like, subject_id],
-                )
+        复用 search.search_similar_titles 的「短语 → AND → OR → LIKE」降级策略，
+        与搜索路径保持一致（B-3），避免查重召回率低于搜索。
+        """
+        async for db in get_db():
+            rows = await search_similar_titles(db, title, subject_id, limit=5)
+            if not rows:
+                return {"status": "unique", "similar_papers": [], "content_hash": ""}
 
             similar = []
             for row in rows:
@@ -258,7 +241,7 @@ class DedupEngine:
                     self._rate_limit_remaining = 0
                     self._rate_limit_reset = time.time() + 60
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"DeepSeek API call failed: {e}")
             self._rate_limit_remaining = 0
             self._rate_limit_reset = time.time() + 60
@@ -277,28 +260,6 @@ class DedupEngine:
             self._rate_limit_remaining = 10
             self._rate_limit_reset = now + 60
         return self._rate_limit_remaining > 0 and self.api_key is not None
-
-    @staticmethod
-    def _extract_keywords(title: str) -> list:
-        """从标题中提取关键词"""
-        # 停用词
-        stopwords = {"的", "与", "及", "和", "在", "为", "了", "是", "有", "年",
-                     "届", "第", "次", "次模拟", "考试", "试卷", "高三", "高考"}
-
-        # 简单分词：按常见分隔符拆分
-        parts = []
-        for sep in [" ", "·", "—", "—", "—"]:
-            title = title.replace(sep, "|")
-        for part in title.split("|"):
-            part = part.strip()
-            if part and part not in stopwords and len(part) >= 2:
-                parts.append(part)
-
-        # 如果没有拆出有效关键词，取标题前8个字
-        if not parts and len(title) >= 4:
-            parts.append(title[:8])
-
-        return parts[:5]  # 最多5个关键词
 
     @staticmethod
     def _title_similarity(title1: str, title2: str) -> float:
