@@ -22,6 +22,7 @@ from search import SearchEngine
 from dedup import DedupEngine
 from auto_scraper import AutoScraper
 from official_docs import OfficialDocsLibrary
+from paper_analysis import PaperAnalyzer
 
 logger = logging.getLogger("gaokao")
 
@@ -52,6 +53,8 @@ def create_lifespan():
         await app.state.auto_scraper.start()
         app.state.official_docs = OfficialDocsLibrary()
         await app.state.official_docs.seed_official_docs()
+        # 阶段二：试卷质量分析引擎（供 /api/papers/.../analyze 复用，含缓存）
+        app.state.paper_analyzer = PaperAnalyzer()
 
         # 预读前端页面到内存（B-4：避免请求期同步 open() 阻塞事件循环）
         html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html")

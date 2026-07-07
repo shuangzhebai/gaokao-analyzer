@@ -13,7 +13,7 @@ from deps import get_auto_scraper
 from errors import global_exception_handler, http_exception_handler
 from lifespan import create_lifespan
 from models import get_db
-from routes import audit, dedup, official_docs, papers, scrape, search
+from routes import analysis, audit, dedup, official_docs, papers, scrape, search
 
 logger = logging.getLogger("gaokao")
 
@@ -65,3 +65,4 @@ app.include_router(dedup.router)
 app.include_router(scrape.router)
 app.include_router(audit.router)
 app.include_router(official_docs.router)
+app.include_router(analysis.router)

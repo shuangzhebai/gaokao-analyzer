@@ -13,7 +13,7 @@ logger = logging.getLogger("gaokao")
 # ============ 版本化迁移（T01：防清空数据） ============
 
 # 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
-CURRENT_SCHEMA_VERSION = 1
+CURRENT_SCHEMA_VERSION = 2
 
 
 async def _ensure_schema_migrations(db) -> None:
@@ -38,7 +38,8 @@ async def _get_applied_version(db) -> int:
 
 async def _add_column_if_missing(db, table: str, column: str, definition: str) -> None:
     """若表中缺少某列，则增量 ALTER 添加（幂等，不删库、不丢数据）。"""
-    cols = [r[1] for r in (await db.execute(f"PRAGMA table_info({table})")).fetchall()]
+    cursor = await db.execute(f"PRAGMA table_info({table})")
+    cols = [r[1] for r in await cursor.fetchall()]
     if column not in cols:
         await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
@@ -65,9 +66,28 @@ async def _migrate_to_v1(db) -> None:
     await _add_column_if_missing(db, "questions", "similar_to", "INTEGER")
 
 
+async def _migrate_to_v2(db) -> None:
+    """阶段二迁移 v2：新增 paper_reports 表（报告落库，便于查询），幂等。"""
+    await db.execute(
+        """CREATE TABLE IF NOT EXISTS paper_reports (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               paper_id INTEGER NOT NULL,
+               report_json TEXT,
+               composite_score REAL,
+               grade TEXT,
+               created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+               FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE
+           )"""
+    )
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_paper_reports_paper ON paper_reports(paper_id)"
+    )
+
+
 # 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
 MIGRATIONS = {
     1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
+    2: ("phase2: 新增 paper_reports 报告表", _migrate_to_v2),
 }
 
 
@@ -412,6 +432,19 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     description TEXT
 );
+
+-- 阶段二：试卷分析报告表（独立表，便于查询；不污染 papers 主表）
+CREATE TABLE IF NOT EXISTS paper_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    paper_id INTEGER NOT NULL,
+    report_json TEXT,
+    composite_score REAL,
+    grade TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_paper_reports_paper ON paper_reports(paper_id);
 """
 
 

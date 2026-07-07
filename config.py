@@ -390,6 +390,150 @@ SOURCE_PRIORITY_MAP = {
     "C": "个人上传/未验证来源",
 }
 
+# ============================================================================
+# 阶段二（后端核心）：可插拔爬虫数据源 + 反爬网络策略 + 试卷分析配置
+# 说明：以下均为静态配置（无密钥），以惰性 getter 暴露，便于运行时调参。
+# ============================================================================
+
+# --- 可插拔数据源适配器类型映射 ---
+# adapter_type 取值 -> 适配器类名（运行时由 scraper.AdapterRegistry 注册/解析）
+SCRAPER_ADAPTER_TYPES = {
+    "local_fixture": "LocalFixtureAdapter",   # 本地样例卷（HTML/JSON/Markdown）
+    "generic_web": "GenericWebAdapter",        # 通用网页（BeautifulSoup + 可配置选择器）
+}
+
+# --- 数据源列表（支持运行时增删）---
+# 每个源声明：id / name / adapter_type / enabled / priority / 抓取参数
+# 新增数据源：在列表中追加一项，ScraperManager 自动注册对应适配器即可生效。
+DATA_SOURCES = [
+    {
+        "id": "local_fixture",
+        "name": "本地样例卷（fixture）",
+        "adapter_type": "local_fixture",
+        "enabled": True,
+        "priority": "S",
+        "base_dir": "tests/fixtures/papers",   # 相对项目根目录
+        "format": "auto",                       # auto | html | json | markdown
+        "recursive": True,
+    },
+    {
+        "id": "moe_web",
+        "name": "教育部考试院（网页适配器样例）",
+        "adapter_type": "generic_web",
+        "enabled": False,                       # 默认关闭：沙箱网络受限 + 反爬，需显式开启
+        "priority": "A",
+        "base_url": "https://www.neea.edu.cn",
+        "search_path": "/html1/report/{year}/index.shtml",
+        "selectors": {
+            "list_item": "a",
+            "title": None,
+            "paper_link": None,
+            "question_block": ".question, .q, li",
+            "q_type": None,
+            "content": None,
+            "options": None,
+            "answer": None,
+            "score": None,
+        },
+        "rate_limit": 3,        # 同域最小间隔（秒）
+        "respect_robots": True,
+    },
+    # 新增数据源示例（真实站点，默认关闭）：
+    # {
+    #     "id": "zxxk_web",
+    #     "name": "学科网（网页适配器）",
+    #     "adapter_type": "generic_web",
+    #     "enabled": False,
+    #     "priority": "A",
+    #     "base_url": "https://www.zxxk.com",
+    #     "search_path": "/soft/search.aspx?keyword={keyword}&page=1",
+    #     "selectors": {"list_item": ".resource-item", "question_block": ".question"},
+    # },
+]
+
+# --- 反爬 / 网络策略（默认安全，不过度请求）---
+SCRAPER_NETWORK = {
+    "user_agent_pool": [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+        "(KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) "
+        "Gecko/20100101 Firefox/121.0",
+    ],
+    "min_delay": 1.0,           # 请求间随机延迟下限（秒）
+    "max_delay": 3.0,           # 请求间随机延迟上限（秒）
+    "timeout": 20,              # 单次请求超时（秒）
+    "max_retries": 3,           # 最大重试次数
+    "backoff_base": 2.0,        # 指数退避底数（秒）
+    "backoff_max": 30.0,        # 最大退避时间（秒）
+    "respect_robots": True,     # 遵守 robots / 限频
+    "verify_ssl": True,
+    "proxy": None,              # 可选代理钩子：{"http": "...", "https": "..."}
+}
+
+# --- 试卷分析配置 ---
+ANALYSIS_CONFIG = {
+    "n_simulation_students": 20000,   # 单卷模拟考生数（可调；权衡速度与精度）
+    "irt_virtual_students": 3000,     # IRT 参数估计用的虚拟考生数
+    "max_workers": 4,                 # 批量并行 worker（线程池，numpy 释放 GIL）
+    "executor": "thread",             # thread | process
+    "use_cache": True,                # 缓存 IRT 拟合 / 知识点映射，避免重复计算
+    "seed": 42,
+    "target_difficulty": 0.65,        # 理想整体难度系数（高考均值约 0.6~0.7）
+}
+
+# 6 维度 -> 综合质量分权重（权重和=1）
+ANALYSIS_WEIGHTS = {
+    "difficulty": 0.15,
+    "knowledge_coverage": 0.20,
+    "type_distribution": 0.15,
+    "discrimination": 0.20,
+    "reliability": 0.15,
+    "validity": 0.15,
+}
+
+# 题型预设分值占比（与标准高考卷对照，用于题型分布偏离度评估）
+QUESTION_TYPE_PRESET = {
+    "math": {"choice": 0.40, "fill": 0.20, "solve": 0.40},
+    "chinese": {"choice": 0.20, "fill": 0.10, "solve": 0.70},
+    "english": {"choice": 0.50, "fill": 0.15, "solve": 0.35},
+    "physics": {"choice": 0.40, "fill": 0.00, "solve": 0.60},
+    "chemistry": {"choice": 0.42, "fill": 0.18, "solve": 0.40},
+    "biology": {"choice": 0.40, "fill": 0.20, "solve": 0.40},
+    "history": {"choice": 0.48, "fill": 0.00, "solve": 0.52},
+    "geography": {"choice": 0.44, "fill": 0.00, "solve": 0.56},
+    "politics": {"choice": 0.48, "fill": 0.00, "solve": 0.52},
+}
+
+
+def get_scraper_network_config() -> dict:
+    """惰性读取爬虫网络/反爬配置（运行时可调参，无需重启）。"""
+    return SCRAPER_NETWORK
+
+
+def get_data_sources_config() -> list:
+    """惰性读取数据源列表配置。"""
+    return DATA_SOURCES
+
+
+def get_analysis_config() -> dict:
+    """惰性读取试卷分析配置。"""
+    return ANALYSIS_CONFIG
+
+
+def get_analysis_weights() -> dict:
+    """惰性读取 6 维度综合权重。"""
+    return ANALYSIS_WEIGHTS
+
+
+def get_question_type_preset(subject_id: str) -> dict:
+    """惰性读取某科题型预设分值占比；缺省回退到 math。"""
+    return QUESTION_TYPE_PRESET.get(subject_id, QUESTION_TYPE_PRESET["math"])
+
+
 # 确保目录存在
 for d in [DATA_DIR, DOWNLOAD_DIR]:
     os.makedirs(d, exist_ok=True)

@@ -1,0 +1,33 @@
+{
+  "title": "2026届高三数学模拟卷（样例）",
+  "year": 2026,
+  "subject": "math",
+  "questions": [
+    {
+      "q_type": "choice",
+      "content": "已知函数 f(x)=x^2，下列结论正确的是",
+      "options": [
+        {"label": "A", "text": "在 R 上单调递增"},
+        {"label": "B", "text": "是偶函数"},
+        {"label": "C", "text": "是奇函数"},
+        {"label": "D", "text": "是常数函数"}
+      ],
+      "answer": "B",
+      "score": 5,
+      "knowledge_points": ["2.2.1"]
+    },
+    {
+      "q_type": "fill",
+      "content": "等差数列 {a_n} 中 a1=1, a3=5，则公差 d = ",
+      "answer": "2",
+      "score": 5,
+      "knowledge_points": ["2.5.1"]
+    },
+    {
+      "q_type": "solve",
+      "content": "正方体 ABCD-A1B1C1D1 的棱长为 1，求其体积与表面积。",
+      "score": 12,
+      "knowledge_points": ["2.7.1"]
+    }
+  ]
+}

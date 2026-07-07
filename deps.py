@@ -56,5 +56,9 @@ def get_auto_scraper(request: Request):
     return request.app.state.auto_scraper
 
 
+def get_paper_analyzer(request: Request):
+    return request.app.state.paper_analyzer
+
+
 def get_official_docs(request: Request):
     return request.app.state.official_docs
