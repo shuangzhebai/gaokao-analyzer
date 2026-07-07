@@ -1105,6 +1105,26 @@ function showToast(msg, type='info') {
   setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(40px)'; setTimeout(() => t.remove(), 300); }, 3500);
 }
 
+// ===== 删除确认对话框 =====
+function confirmAction(message) {
+  return confirm(message);
+}
+
+async function deletePaper(id, title) {
+  if (!confirm(`确定要删除试卷「${title}」吗？此操作不可恢复。`)) {
+    return;
+  }
+  try {
+    await api(`/api/papers/${id}`, {method: 'DELETE'});
+    showToast(`已删除「${title}」`, 'success');
+    // 刷新当前页面
+    if (currentPage === 'detail') switchPage('papers');
+    else searchPapers();
+  } catch (e) {
+    showToast('删除失败：' + e.message, 'error');
+  }
+}
+
 // ===== 页面切换 =====
 function switchPage(page, data) {
   currentPage = page;
