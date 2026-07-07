@@ -707,3 +707,27 @@ async def seed_data():
                 kp_map[code] = kp_id
 
         await db.commit()
+
+
+async def optimize_fts(db=None):
+    """优化 FTS5 索引：合并段、提升搜索精度（P-6）。
+
+    Args:
+        db: 可选的数据库连接；为 None 时内部创建新连接。
+    """
+    tables = ["papers_fts", "questions_fts"]
+    if db is None:
+        async with aiosqlite.connect(DB_PATH) as conn:
+            for table in tables:
+                try:
+                    await conn.execute(f"INSERT INTO {table}({table}) VALUES('optimize')")
+                except Exception:  # noqa: BLE001
+                    pass
+            await conn.commit()
+    else:
+        for table in tables:
+            try:
+                await db.execute(f"INSERT INTO {table}({table}) VALUES('optimize')")
+            except Exception:  # noqa: BLE001
+                pass
+        await db.commit()
