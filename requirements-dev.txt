@@ -1,0 +1,6 @@
+# 开发 / CI 依赖（不在运行镜像中安装）
+ruff>=0.6.9
+mypy>=1.11.2
+black==24.8.0
+pytest>=8.0
+pytest-asyncio>=0.23

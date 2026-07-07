@@ -1,0 +1,37 @@
+# 虚拟环境（使用镜像内系统 pip 重新安装依赖）
+.venv/
+venv/
+env/
+
+# 版本控制
+.git/
+
+# Python 缓存与编译产物
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 预提交 / CI
+.github/
+
+# 前端依赖
+node_modules/
+
+# 运行时数据（数据库由 lifespan 在运行时生成 / compose 挂载 ./data 持久化）
+data/
+*.db
+*.db-journal
+*.db-wal
+
+# 打包产物
+*.egg-info/
+dist/
+build/
+
+# 杂项
+DELIVERY.md
+*.ipynb

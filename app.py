@@ -21,6 +21,16 @@ import edu_source_adapters  # noqa: F401 — 注册 xueke_wang / zujuan_wang 适
 from models import get_db
 from routes import analysis, audit, dedup, official_docs, papers, scrape, search
 
+# API 速率限制（slowapi）：若运行环境未安装 slowapi，则优雅降级（不启用限速）。
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.middleware import SlowAPIMiddleware
+    _HAS_SLOWAPI = True
+except ImportError:  # pragma: no cover - 本地 venv 未装时优雅降级
+    _HAS_SLOWAPI = False
+
 logger = logging.getLogger("gaokao")
 
 app = FastAPI(
@@ -70,6 +80,30 @@ class AuthMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(AuthMiddleware)
+
+
+# ============ 安全响应头 ============
+# 在 CORS / Auth 之后注入 HSTS、X-Content-Type-Options、X-Frame-Options、
+# Referrer-Policy 等安全头。不改变既有 CORS / Auth 中间件顺序与逻辑。
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """为所有 HTTP 响应追加安全响应头。"""
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+# ============ API 速率限制（slowapi，全局默认 + 优雅降级） ============
+# 采用全局 default_limits（200/min）即满足「API 速率限制」，不装饰各路由（避免改路由签名）。
+if _HAS_SLOWAPI:
+    limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_middleware(SlowAPIMiddleware)
 
 
 # ============ 页面路由 ============

@@ -1,0 +1,12 @@
+# 代码质量工具配置（与 .pre-commit-config.yaml / requirements-dev.txt 对齐）
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+exclude = ["tests"]

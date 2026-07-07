@@ -1,0 +1,18 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # 跨域白名单：生产环境建议显式指定来源（逗号分隔），如 https://app.example.com
+      CORS_ORIGINS: "*"
+      # API Key：留空则不启用鉴权（兼容单机使用）
+      API_KEY: ""
+      # 运行环境标识（dev / prod）
+      GAOKAO_ENV: "dev"
+      # 关闭 Python 输出缓冲，便于容器日志实时查看
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # 数据持久化：镜像内 DB 路径为 /app/data（与 config.DB_PATH=data/gaokao.db 一致）
+      - ./data:/app/data
+    restart: unless-stopped
