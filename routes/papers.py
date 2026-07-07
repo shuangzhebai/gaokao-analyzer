@@ -161,8 +161,13 @@ async def upload_paper(
     ext = os.path.splitext(safe_filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(400, f"不允许的文件类型: {ext}，仅支持 {', '.join(sorted(ALLOWED_EXTENSIONS))}")
+
+    # 文件大小限制（F-3：防止 DoS 攻击）
+    MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
     save_path = os.path.join(DOWNLOAD_DIR, safe_filename)
     content = await file.read()
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(413, f"文件过大（最大 50MB），实际 {len(content) / 1024 / 1024:.1f}MB")
     with open(save_path, "wb") as f:
         f.write(content)
 
