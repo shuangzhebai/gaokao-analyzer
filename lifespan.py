@@ -25,6 +25,7 @@ from dedup import DedupEngine
 from auto_scraper import AutoScraper
 from official_docs import OfficialDocsLibrary
 from paper_analysis import PaperAnalyzer
+from app_context import build_app_context
 
 logger = logging.getLogger("gaokao")
 
@@ -99,6 +100,10 @@ def create_lifespan():
             app.state.index_html = "<html><body>前端文件缺失</body></html>"
 
         logger.info("gaokao-analyzer startup complete - engines ready, index cached")
+
+        # 运行时上下文集中化（批次二：T-C2）：构建不可变快照存入 app.state.ctx，
+        # 供依赖注入 get_app_context 与路由统一读取。
+        app.state.ctx = build_app_context(app)
 
         yield
 

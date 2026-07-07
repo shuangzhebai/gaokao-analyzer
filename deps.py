@@ -6,6 +6,7 @@
 from fastapi import Request
 
 from models import get_db
+from app_context import AppContext
 
 
 def get_scraper_manager(request: Request):
@@ -62,3 +63,8 @@ def get_paper_analyzer(request: Request):
 
 def get_official_docs(request: Request):
     return request.app.state.official_docs
+
+
+def get_app_context(request: Request) -> AppContext:
+    """返回运行时集中化的应用上下文快照（app.state.ctx）。"""
+    return request.app.state.ctx
