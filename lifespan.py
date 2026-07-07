@@ -3,7 +3,9 @@
 使用 @asynccontextmanager 替代已弃用的 @on_event("startup"/"shutdown")。
 在启动时初始化所有引擎单例并存入 app.state（供依赖注入使用），
 并在启动时将前端 index.html 读入内存缓存（避免运行时同步读磁盘阻塞事件循环，B-4）。
+v5.2: 引擎初始化并行化（P-2），使用 asyncio.gather 加速冷启动。
 """
+import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -27,6 +29,27 @@ from paper_analysis import PaperAnalyzer
 logger = logging.getLogger("gaokao")
 
 
+async def _init_engine(app, attr_name, factory, *args, **kwargs):
+    """同步构造型引擎初始化，异常时仅警告不中断启动流程。"""
+    try:
+        instance = factory(*args, **kwargs)
+        setattr(app.state, attr_name, instance)
+        logger.debug("引擎 %s 初始化完成", attr_name)
+        return instance
+    except Exception as e:  # noqa: BLE001
+        logger.warning("引擎 %s 初始化失败: %s", attr_name, e)
+        return None
+
+
+async def _init_async(app, coro, label="unknown"):
+    """异步型引擎初始化（如 await .start()），异常时仅警告。"""
+    try:
+        await coro
+        logger.debug("引擎 %s 异步初始化完成", label)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("引擎 %s 异步初始化失败: %s", label, e)
+
+
 def create_lifespan():
     """返回一个 FastAPI lifespan 上下文管理器。"""
 
@@ -37,24 +60,33 @@ def create_lifespan():
         await init_db()       # 含版本化迁移（T01），不删库
         await seed_data()
 
-        # 初始化引擎单例到 app.state（依赖注入源，T04）
-        app.state.scraper_manager = ScraperManager()
-        app.state.irt_model = IRTModel()
-        app.state.kp_mapper = KnowledgeMapper()
-        app.state.quality_analyzer = QualityAnalyzer()
-        app.state.simulator = MonteCarloSimulator()
-        app.state.fitting_analyzer = FittingAnalyzer()
-        app.state.paper_parser = PaperParser()
-        app.state.curriculum_analyzer = CurriculumAnalyzer()
-        app.state.quality_scorer = QualityScorer()
-        app.state.search_engine = SearchEngine()
-        app.state.dedup_engine = DedupEngine(deepseek_api_key=get_deepseek_key() or None)
-        app.state.auto_scraper = AutoScraper(deepseek_api_key=get_deepseek_key() or "")
-        await app.state.auto_scraper.start()
-        app.state.official_docs = OfficialDocsLibrary()
-        await app.state.official_docs.seed_official_docs()
-        # 阶段二：试卷质量分析引擎（供 /api/papers/.../analyze 复用，含缓存）
-        app.state.paper_analyzer = PaperAnalyzer()
+        # ======== 引擎初始化并行化（P-2） ========
+        # 阶段一：所有同步构造引擎并行初始化
+        await asyncio.gather(
+            _init_engine(app, "scraper_manager", ScraperManager),
+            _init_engine(app, "irt_model", IRTModel),
+            _init_engine(app, "kp_mapper", KnowledgeMapper),
+            _init_engine(app, "quality_analyzer", QualityAnalyzer),
+            _init_engine(app, "simulator", MonteCarloSimulator),
+            _init_engine(app, "fitting_analyzer", FittingAnalyzer),
+            _init_engine(app, "paper_parser", PaperParser),
+            _init_engine(app, "curriculum_analyzer", CurriculumAnalyzer),
+            _init_engine(app, "quality_scorer", QualityScorer),
+            _init_engine(app, "search_engine", SearchEngine),
+            _init_engine(app, "dedup_engine", DedupEngine,
+                         deepseek_api_key=get_deepseek_key() or None),
+            _init_engine(app, "auto_scraper", AutoScraper,
+                         deepseek_api_key=get_deepseek_key() or ""),
+            _init_engine(app, "official_docs", OfficialDocsLibrary),
+            _init_engine(app, "paper_analyzer", PaperAnalyzer),
+        )
+
+        # 阶段二：异步启动操作并行执行
+        await asyncio.gather(
+            _init_async(app, app.state.auto_scraper.start(), "auto_scraper.start"),
+            _init_async(app, app.state.official_docs.seed_official_docs(),
+                        "official_docs.seed_official_docs"),
+        )
 
         # 预读前端页面到内存（B-4：避免请求期同步 open() 阻塞事件循环）
         html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html")
