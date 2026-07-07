@@ -25,6 +25,25 @@ SUBJECTS = {
     "politics": {"name": "政治", "total_score": 100, "time_min": 75},
 }
 
+# 科目「中文名 → 英文 key」反向映射（供分析模块按知识点大纲/题量预设查表）
+SUBJECT_NAME_TO_KEY = {v["name"]: k for k, v in SUBJECTS.items()}
+
+
+def normalize_subject(subject: str) -> str:
+    """将科目归一为英文 key。
+
+    - 已是英文 key（如 "math"）直接返回；
+    - 中文名（如 "数学"）映射到对应 key；
+    - 空值或未知科目回退 "math"。
+    用于 KNOWLEDGE_SEED / 题量预设 / 知识点映射器等查找，避免中文科目名查不到大纲。
+    """
+    if not subject:
+        return "math"
+    s = str(subject).strip()
+    if s in SUBJECTS:
+        return s
+    return SUBJECT_NAME_TO_KEY.get(s, "math")
+
 # 卷别类型
 PAPER_TYPES = {
     "real": "高考真题",

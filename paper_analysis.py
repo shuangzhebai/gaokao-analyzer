@@ -25,7 +25,8 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 from analyzer import IRTModel, KnowledgeMapper, QualityAnalyzer
-from config import get_analysis_config, get_analysis_weights, get_question_type_preset
+from config import (get_analysis_config, get_analysis_weights,
+                     get_question_type_preset, normalize_subject)
 from models import KNOWLEDGE_SEED
 from simulator import MonteCarloSimulator
 
@@ -180,7 +181,7 @@ class PaperAnalyzer:
             with self._lock:
                 if key in self._kp_cache:
                     return self._kp_cache[key]
-        kps = self.kp_mapper.map_question(content or "", subject)
+        kps = self.kp_mapper.map_question(content or "", normalize_subject(subject))
         if self.use_cache:
             with self._lock:
                 self._kp_cache[key] = kps
@@ -294,7 +295,7 @@ class PaperAnalyzer:
     # ===================== 维度 2：知识点覆盖 =====================
 
     def _eval_knowledge_coverage(self, questions, subject) -> Dict[str, Any]:
-        pool = [code for code, _n, _p, _l in KNOWLEDGE_SEED.get(subject, [])]
+        pool = [code for code, _n, _p, _l in KNOWLEDGE_SEED.get(normalize_subject(subject), [])]
         pool_set = set(pool)
         pool_size = len(pool_set)
         self._ensure_knowledge(questions, subject)
@@ -355,7 +356,7 @@ class PaperAnalyzer:
         type_ratios = {t: round(c / n, 4) for t, c in type_count.items()}
         score_ratios = {t: round(type_score[t] / total_score, 4) for t in type_score}
 
-        preset = get_question_type_preset(subject)
+        preset = get_question_type_preset(normalize_subject(subject))
         if preset:
             dev = sum(abs(score_ratios.get(t, 0.0) - w) for t, w in preset.items())
             for t in preset:
@@ -484,7 +485,7 @@ class PaperAnalyzer:
     # ===================== 维度 6：效度 =====================
 
     def _eval_validity(self, questions, subject) -> Dict[str, Any]:
-        pool = [code for code, _n, _p, _l in KNOWLEDGE_SEED.get(subject, [])]
+        pool = [code for code, _n, _p, _l in KNOWLEDGE_SEED.get(normalize_subject(subject), [])]
         pool_set = set(pool)
         pool_size = len(pool_set)
         self._ensure_knowledge(questions, subject)
