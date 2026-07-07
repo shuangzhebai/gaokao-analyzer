@@ -30,6 +30,10 @@ class DedupEngine:
         self._rate_limit_remaining = 10
         self._rate_limit_reset = 0
 
+    def __repr__(self):
+        masked = self.api_key[:4] + "****" if self.api_key else "None"
+        return f"DedupEngine(api_key={masked})"
+
     @staticmethod
     def compute_content_hash(title: str, subject_id: str, year: int,
                              questions: list = None) -> str:
