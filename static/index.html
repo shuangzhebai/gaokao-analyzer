@@ -34,14 +34,29 @@
   --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
   --shadow-lg: 0 12px 40px rgba(0,0,0,0.10);
   --shadow-float: 0 20px 60px rgba(0,0,0,0.14);
+
+  /* ===== 液态玻璃设计变量（Liquid Glass） ===== */
   --glass-bg: rgba(255,255,255,0.55);
-  --glass-border: rgba(255,255,255,0.25);
+  --glass-strong: rgba(255,255,255,0.72);
+  --glass-border: rgba(255,255,255,0.45);
   --glass-blur: blur(40px) saturate(180%);
+  --glass-shadow:
+    inset 0 1px 1px rgba(255,255,255,0.65),
+    inset 0 -1px 1px rgba(0,0,0,0.04),
+    0 8px 32px rgba(0,0,0,0.10);
+  --glass-shadow-hover:
+    inset 0 1px 1px rgba(255,255,255,0.8),
+    inset 0 -1px 1px rgba(0,0,0,0.05),
+    0 16px 48px rgba(0,0,0,0.14);
   --liquid-bg: rgba(255,255,255,0.35);
   --liquid-border: rgba(255,255,255,0.18);
+  --radius: 20px;
+  --accent: var(--apple-blue);
+  --accent-2: var(--apple-purple);
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', sans-serif;
-  --transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+  --transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
   --spring: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -538,6 +553,12 @@ body {
 /* ===== 空状态 ===== */
 .empty-state {
   text-align: center; padding: 80px 20px; color: var(--text-2);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
 }
 .empty-state .empty-icon { font-size: 56px; margin-bottom: 16px; }
 .empty-state .empty-text { font-size: 16px; margin-bottom: 8px; font-weight: 500; }
@@ -547,6 +568,12 @@ body {
 .loading {
   display: flex; align-items: center; justify-content: center;
   padding: 48px; color: var(--text-2);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
 }
 .spinner {
   width: 28px; height: 28px;
@@ -585,6 +612,210 @@ body {
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .chart-grid { grid-template-columns: 1fr; }
   .nav-search { max-width: 50vw; width: auto; }
+}
+
+/* ============================================================
+   液态玻璃（Liquid Glass）通用工具类与动效 — 阶段三新增
+   ============================================================ */
+html { scroll-behavior: smooth; }
+
+/* 通用玻璃表面 */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* 玻璃卡片（带弹性悬停反馈） */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--glass-shadow);
+  transition: var(--spring);
+}
+.glass-card:hover {
+  box-shadow: var(--glass-shadow-hover);
+  transform: translateY(-3px) scale(1.01);
+}
+
+/* 玻璃按钮（弹性反馈） */
+.glass-btn {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: var(--glass-shadow);
+  transition: var(--spring);
+  cursor: pointer;
+}
+.glass-btn:hover {
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: var(--glass-shadow-hover);
+  background: var(--glass-strong);
+}
+.glass-btn:active { transform: translateY(0) scale(0.96); }
+
+/* ===== 弹性入场动画 ===== */
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+.animate-in { animation: fadeInUp 0.5s var(--ease-soft) both; }
+.animate-pop { animation: fadeInScale 0.45s var(--spring) both; }
+
+/* 列表/卡片错峰入场 */
+.stagger > * { animation: fadeInUp 0.5s var(--ease-soft) both; }
+.stagger > *:nth-child(1) { animation-delay: 0.03s; }
+.stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.stagger > *:nth-child(3) { animation-delay: 0.09s; }
+.stagger > *:nth-child(4) { animation-delay: 0.12s; }
+.stagger > *:nth-child(5) { animation-delay: 0.15s; }
+.stagger > *:nth-child(6) { animation-delay: 0.18s; }
+.stagger > *:nth-child(7) { animation-delay: 0.21s; }
+.stagger > *:nth-child(8) { animation-delay: 0.24s; }
+.stagger > *:nth-child(n+9) { animation-delay: 0.27s; }
+
+/* 现有卡片统一弹性入场（淡入 + 轻微上移） */
+.paper-card, .stat-card, .question-card, .doc-card, .collect-panel {
+  animation: fadeInUp 0.45s var(--ease-soft) both;
+}
+
+/* ===== 模态框（缩放 + 淡入） ===== */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 5000;
+  background: rgba(0,0,0,0.25);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.25s ease-out;
+}
+.modal-card {
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow-hover);
+  padding: 28px; max-width: 520px; width: calc(100% - 48px);
+  animation: fadeInScale 0.4s var(--spring);
+}
+
+/* ===== 玻璃骨架屏（Shimmer） ===== */
+.skeleton {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: var(--glass-shadow);
+  position: relative; overflow: hidden;
+}
+.skeleton::after {
+  content: ''; position: absolute; inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+  animation: shimmer 1.4s infinite;
+}
+.skeleton-line { height: 14px; border-radius: 6px; background: rgba(0,0,0,0.06); margin: 12px 0; }
+.skeleton-block { border-radius: var(--radius-md); background: rgba(0,0,0,0.05); }
+
+/* ===== 玻璃状态卡（空态/错误态） ===== */
+.state-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  text-align: center; padding: 48px 24px; color: var(--text-2);
+  animation: fadeInUp 0.4s var(--ease-soft) both;
+}
+.state-card .state-icon { font-size: 48px; margin-bottom: 14px; }
+.state-card .state-title { font-size: 16px; font-weight: 600; color: var(--text-1); margin-bottom: 6px; }
+.state-card .state-hint { font-size: 13px; color: var(--text-3); }
+
+/* ===== 试卷质量分析报告 ===== */
+.analysis-section { margin-top: 32px; }
+.analysis-overview { display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap; margin-bottom: 20px; }
+.composite-card {
+  flex: 1 1 280px; min-height: 200px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow);
+  padding: 24px; display: flex; flex-direction: column; gap: 12px;
+  position: relative; overflow: hidden;
+}
+.composite-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--apple-blue), var(--apple-purple));
+  border-radius: 3px 3px 0 0;
+}
+.composite-label { font-size: 12px; color: var(--text-2); font-weight: 600; }
+.composite-score {
+  font-size: 64px; font-weight: 800; letter-spacing: -2px; line-height: 1;
+  color: var(--apple-blue);
+  background: linear-gradient(135deg, var(--apple-blue), var(--apple-purple));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.grade-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 700; padding: 6px 14px; border-radius: 999px;
+  border: 1px solid var(--glass-border); background: var(--glass-bg);
+}
+.grade-优秀 { background: rgba(52,199,89,0.14); color: var(--apple-green); }
+.grade-良好 { background: rgba(0,122,255,0.14); color: var(--apple-blue); }
+.grade-合格 { background: rgba(255,149,0,0.14); color: var(--apple-orange); }
+.grade-待改进 { background: rgba(255,59,48,0.14); color: var(--apple-red); }
+.composite-conclusion {
+  font-size: 13px; line-height: 1.7; color: var(--text-2);
+  background: rgba(0,0,0,0.03); border-radius: 12px; padding: 14px; margin-top: auto;
+}
+.dimension-grid { flex: 2 1 480px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.dimension-item {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur); -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--glass-shadow);
+  padding: 14px 16px; transition: var(--spring);
+}
+.dimension-item:hover { transform: translateY(-2px) scale(1.02); box-shadow: var(--glass-shadow-hover); }
+.dimension-name { font-size: 12px; color: var(--text-2); margin-bottom: 10px; font-weight: 600; }
+.dimension-bar { height: 8px; border-radius: 999px; background: rgba(0,0,0,0.06); overflow: hidden; margin-bottom: 8px; }
+.dimension-bar > span { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--apple-blue), var(--apple-purple)); transition: width 0.8s var(--ease-soft); }
+.dimension-score { font-size: 20px; font-weight: 800; color: var(--text-1); }
+.dimension-conclusion { font-size: 11px; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+
+.analysis-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 8px; }
+.chart-card.glass { display: flex; flex-direction: column; min-height: 320px; }
+.chart-card.glass canvas { flex: 1; width: 100% !important; min-height: 240px; }
+@media (max-width: 768px) { .analysis-charts { grid-template-columns: 1fr; } }
+
+/* ===== 尊重 prefers-reduced-motion（仅保留淡入） ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .skeleton::after { animation: none !important; }
+  .animate-in, .animate-pop, .stagger > *, .state-card,
+  .glass-card, .dimension-item, .stat-card, .paper-card,
+  .question-card, .doc-card, .chart-card {
+    animation: fadeIn 0.25s ease-out both !important;
+    transform: none !important;
+  }
 }
 </style>
 </head>
@@ -1069,6 +1300,7 @@ async function loadDetail(paperId) {
           <button class="nav-btn primary" onclick="runSimulate(${p.id})" ${p.analysis_status!=='irt_estimated'?'disabled':''}>成绩模拟</button>
           <button class="nav-btn secondary" onclick="runCurriculum(${p.id})">课标分析</button>
           <button class="nav-btn secondary" onclick="runQuality(${p.id})">质量评估</button>
+          <button class="nav-btn primary" onclick="runPaperAnalysis(${p.id})">&#128202; 质量分析报告</button>
           <button class="nav-btn secondary" onclick="auditOnePaper(${p.id})">真实性审核</button>
         </div>
       </div>
@@ -1097,6 +1329,7 @@ async function loadDetail(paperId) {
           <div class="chart-card"><h3>知识点覆盖</h3><canvas id="kpChart"></canvas></div>
         </div>
       ` : ''}
+      <div id="analysisReport"></div>
     `;
 
     if (data.analyses.length) {
@@ -1342,6 +1575,240 @@ async function runBatchAudit() {
     showToast(`审核完成: ${data.total_audited} 份 (A:${data.grade_distribution.A||0} B:${data.grade_distribution.B||0} C:${data.grade_distribution.C||0} D:${data.grade_distribution.D||0})`, 'success');
     loadAuditPage();
   } catch {}
+}
+
+// ===== 试卷质量分析报告（消费 /api/papers/{id}/analyze 与 /report） =====
+// 维度中文标签
+const DIM_LABELS = {
+  difficulty: '难度',
+  knowledge_coverage: '知识点覆盖',
+  type_distribution: '题型分布',
+  discrimination: '区分度',
+  reliability: '信度',
+  validity: '效度'
+};
+// 保存 Chart 实例，便于重新渲染前销毁
+let analysisCharts = {};
+
+// 生成报告（POST /api/papers/{id}/analyze）
+async function runPaperAnalysis(paperId) {
+  const container = document.getElementById('analysisReport');
+  if (!container) return;
+  container.innerHTML = renderAnalysisSkeleton();
+  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  showToast('正在生成试卷质量分析报告...', 'info');
+  try {
+    const report = await api(`/api/papers/${paperId}/analyze`, { method: 'POST' });
+    renderAnalysis(report, paperId);
+    showToast('质量分析报告已生成', 'success');
+  } catch (e) {
+    if (container) container.innerHTML = renderAnalysisError(paperId);
+  }
+}
+
+// 加载已存报告（GET /api/papers/{id}/report）
+async function loadStoredReport(paperId) {
+  const container = document.getElementById('analysisReport');
+  if (!container) return;
+  container.innerHTML = renderAnalysisSkeleton();
+  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  showToast('正在加载已存报告...', 'info');
+  try {
+    const report = await api(`/api/papers/${paperId}/report`);
+    renderAnalysis(report, paperId);
+    showToast('已加载已存报告', 'success');
+  } catch (e) {
+    if (container) container.innerHTML = renderAnalysisError(paperId);
+  }
+}
+
+// 骨架屏
+function renderAnalysisSkeleton() {
+  return `
+    <div class="analysis-section animate-in">
+      <div class="section-header"><div class="section-title">试卷质量分析报告</div></div>
+      <div class="analysis-overview">
+        <div class="skeleton" style="flex:1 1 280px;min-height:200px;padding:24px">
+          <div class="skeleton-line" style="width:40%"></div>
+          <div class="skeleton-block" style="height:80px;margin-top:18px"></div>
+          <div class="skeleton-line" style="width:80%"></div>
+          <div class="skeleton-line" style="width:60%"></div>
+        </div>
+        <div class="skeleton" style="flex:2 1 480px;min-height:200px;padding:24px">
+          <div class="skeleton-line" style="width:30%"></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:14px">
+            <div class="skeleton-block" style="height:72px"></div>
+            <div class="skeleton-block" style="height:72px"></div>
+            <div class="skeleton-block" style="height:72px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="analysis-charts">
+        <div class="skeleton" style="min-height:320px"></div>
+        <div class="skeleton" style="min-height:320px"></div>
+        <div class="skeleton" style="min-height:320px"></div>
+        <div class="skeleton" style="min-height:320px"></div>
+      </div>
+    </div>`;
+}
+
+// 错误态
+function renderAnalysisError(paperId) {
+  return `
+    <div class="analysis-section">
+      <div class="state-card">
+        <div class="state-icon">&#9888;</div>
+        <div class="state-title">分析报告生成失败</div>
+        <div class="state-hint">请稍后重试，或确认该试卷包含足够的题目与分析数据。</div>
+        <button class="nav-btn primary" style="margin-top:16px" onclick="runPaperAnalysis(${paperId})">重新生成</button>
+      </div>
+    </div>`;
+}
+
+// 渲染完整报告
+function renderAnalysis(report, paperId) {
+  const container = document.getElementById('analysisReport');
+  if (!container) return;
+
+  const dims = report.dimensions || {};
+  const dimKeys = ['difficulty', 'knowledge_coverage', 'type_distribution', 'discrimination', 'reliability', 'validity'];
+  const composite = report.composite || {};
+  const grade = composite.grade || '—';
+  const score = (composite.score != null) ? composite.score : '—';
+
+  const overviewHtml = `
+    <div class="composite-card">
+      <div class="composite-label">综合质量分</div>
+      <div class="composite-score">${score}</div>
+      <div><span class="grade-badge grade-${grade}">${grade}</span></div>
+      <div class="composite-conclusion">${composite.conclusion || '（暂无综合结论）'}</div>
+    </div>
+    <div class="dimension-grid">
+      ${dimKeys.map(k => {
+        const d = dims[k] || {};
+        const s = (d.score != null) ? d.score : 0;
+        const pct = Math.max(0, Math.min(100, s));
+        return `
+          <div class="dimension-item">
+            <div class="dimension-name">${DIM_LABELS[k] || k}</div>
+            <div class="dimension-bar"><span style="width:${pct}%"></span></div>
+            <div class="dimension-score">${s}</div>
+            ${d.conclusion ? `<div class="dimension-conclusion">${d.conclusion}</div>` : ''}
+          </div>`;
+      }).join('')}
+    </div>`;
+
+  const v = report.visualization || {};
+  const hasCharts = Object.keys(v).length > 0;
+  const chartsHtml = `
+    <div class="analysis-charts">
+      ${v.radar ? `<div class="chart-card glass"><h3>六维质量雷达</h3><canvas id="radarChart"></canvas></div>` : ''}
+      ${v.type_distribution_bar ? `<div class="chart-card glass"><h3>题型分布</h3><canvas id="typeDistChart"></canvas></div>` : ''}
+      ${v.knowledge_bar ? `<div class="chart-card glass"><h3>知识点覆盖（Top 15）</h3><canvas id="knowledgeChart"></canvas></div>` : ''}
+      ${v.difficulty_curve ? `<div class="chart-card glass"><h3>难度曲线</h3><canvas id="difficultyChart"></canvas></div>` : ''}
+    </div>`;
+
+  container.innerHTML = `
+    <div class="analysis-section animate-in">
+      <div class="section-header">
+        <div class="section-title">试卷质量分析报告</div>
+        <div class="section-action" onclick="loadStoredReport(${paperId})">查看已存报告 &rarr;</div>
+      </div>
+      <div class="analysis-overview">${overviewHtml}</div>
+      ${hasCharts ? chartsHtml : '<div class="state-card"><div class="state-icon">&#128202;</div><div class="state-title">暂无可视化数据</div><div class="state-hint">该报告未返回图表数据。</div></div>'}
+    </div>`;
+
+  if (hasCharts) renderAnalysisCharts(report);
+}
+
+// 渲染四张图表
+function renderAnalysisCharts(report) {
+  const v = report.visualization || {};
+  // 销毁旧实例，避免内存泄漏与画布重叠
+  Object.values(analysisCharts).forEach(c => { try { c.destroy(); } catch (e) {} });
+  analysisCharts = {};
+
+  const accent = '#007AFF';
+
+  // 1) 六维雷达
+  const radar = v.radar || [];
+  if (radar.length) {
+    const el = document.getElementById('radarChart');
+    if (el) {
+      analysisCharts.radar = new Chart(el.getContext('2d'), {
+        type: 'radar',
+        data: {
+          labels: radar.map(d => DIM_LABELS[d.dimension] || d.dimension),
+          datasets: [{
+            label: '得分',
+            data: radar.map(d => d.score),
+            backgroundColor: 'rgba(0,122,255,0.18)',
+            borderColor: accent,
+            borderWidth: 2,
+            pointBackgroundColor: accent,
+            pointRadius: 3
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: { r: {
+            min: 0, max: 100, ticks: { stepSize: 20, backdropColor: 'transparent' },
+            grid: { color: 'rgba(0,0,0,0.06)' }, angleLines: { color: 'rgba(0,0,0,0.06)' },
+            pointLabels: { font: { size: 12 } }
+          } }
+        }
+      });
+    }
+  }
+
+  // 2) 题型分布柱状图
+  const types = v.type_distribution_bar || [];
+  if (types.length) {
+    const el = document.getElementById('typeDistChart');
+    if (el) {
+      analysisCharts.type = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: types.map(d => d.type),
+          datasets: [{ label: '占比 %', data: types.map(d => d.ratio), backgroundColor: 'rgba(0,122,255,0.5)', borderRadius: 6, borderSkipped: false }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+    }
+  }
+
+  // 3) 知识点覆盖柱状图（取前 15）
+  const kps = (v.knowledge_bar || []).slice(0, 15);
+  if (kps.length) {
+    const el = document.getElementById('knowledgeChart');
+    if (el) {
+      analysisCharts.kp = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: kps.map(d => d.code),
+          datasets: [{ label: '出现频次', data: kps.map(d => d.frequency), backgroundColor: 'rgba(175,82,222,0.5)', borderRadius: 6, borderSkipped: false }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+    }
+  }
+
+  // 4) 难度曲线（折线）
+  const diff = v.difficulty_curve || [];
+  if (diff.length) {
+    const el = document.getElementById('difficultyChart');
+    if (el) {
+      analysisCharts.diff = new Chart(el.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: diff.map(d => d.q_index),
+          datasets: [{ label: '难度', data: diff.map(d => d.difficulty), borderColor: accent, backgroundColor: 'rgba(0,122,255,0.12)', fill: true, tension: 0.35, pointRadius: 2 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      });
+    }
+  }
 }
 
 // ===== 初始化 =====
