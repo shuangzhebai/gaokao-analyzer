@@ -313,7 +313,7 @@ class MonteCarloSimulator:
         return result
 
     def _compute_grade_assignment(self, scores, max_score):
-        """新高考等级赋分模拟"""
+        """新高考等级赋分模拟（P-5：批量分位点计算，单次 O(n log n)）"""
         if max_score <= 0:
             return {}
 
@@ -324,20 +324,34 @@ class MonteCarloSimulator:
 
         result = {"applicable": True, "grades": []}
 
-        for grade_name, rule in GRADE_ASSIGNMENT_RULES.items():
+        # 收集所有需要的不重复分位点
+        needed = set()
+        for rule in GRADE_ASSIGNMENT_RULES.values():
+            p_top = rule["percentile_top"]
+            needed.add(100 - p_top)  # raw_low
+        # 加上边界值
+        needed.add(0)    # F 等级的 p_bottom 对应 100%
+        needed.add(100)  # A 等级的 p_bottom=0 对应 100 分位
+
+        # 一次性计算所有分位点
+        percentiles_list = sorted(needed)
+        computed = np.percentile(scores, percentiles_list)
+        pct_map = dict(zip(percentiles_list, computed))
+
+        grades_order = list(GRADE_ASSIGNMENT_RULES.keys())
+        for i, (grade_name, rule) in enumerate(GRADE_ASSIGNMENT_RULES.items()):
             p_top = rule["percentile_top"]
             score_low, score_high = rule["score_range"]
 
-            # 找到该等级对应的原始分范围
+            # 上一个等级的 p_top 即本等级的 p_bottom
             p_bottom = 0
-            for prev_grade, prev_rule in GRADE_ASSIGNMENT_RULES.items():
-                if list(GRADE_ASSIGNMENT_RULES.keys()).index(prev_grade) < \
-                   list(GRADE_ASSIGNMENT_RULES.keys()).index(grade_name):
-                    p_bottom = prev_rule["percentile_top"]
+            if i > 0:
+                prev_rule = GRADE_ASSIGNMENT_RULES[grades_order[i - 1]]
+                p_bottom = prev_rule["percentile_top"]
 
-            # 百分位对应的原始分
-            raw_low = float(np.percentile(scores, 100 - p_top)) if p_top < 100 else float(np.min(scores))
-            raw_high = float(np.percentile(scores, 100 - p_bottom)) if p_bottom < 100 else float(np.max(scores))
+            # 从预计算的分位点映射中取值
+            raw_low = float(pct_map.get(100 - p_top, float(np.min(scores))))
+            raw_high = float(pct_map.get(100 - p_bottom, float(np.max(scores))))
 
             result["grades"].append({
                 "grade": grade_name,
