@@ -7,6 +7,7 @@ v5.1: 路由拆分(routes/*)、lifespan 改造(@asynccontextmanager)、异常安
 import logging
 import os
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -26,6 +27,16 @@ app = FastAPI(
     title="高考模拟卷智能分析系统",
     version=VERSION,
     lifespan=create_lifespan(),
+)
+
+# CORS 中间件（S-5：API 独立部署时跨域受限）
+# 默认宽松兼容单机开发，生产环境通过环境变量 CORS_ORIGINS 限制
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # 异常处理器（R-2：全局异常仅返回通用错误，不泄露内部路径/SQL）
