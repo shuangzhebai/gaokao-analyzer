@@ -1,8 +1,17 @@
 # gaokao-analyzer GitHub one-click push script (PowerShell)
-# Usage: right-click -> "Run with PowerShell" or run in PowerShell
+# Usage: right-click -> "Run with PowerShell"
 
 $repo = "C:\Users\29499\WorkBuddy\Claw\gaokao-analyzer"
 $remote = "https://github.com/shuangzhebai/gaokao-analyzer.git"
+$gitBin = "C:\Users\29499\.workbuddy\vendor\PortableGit\cmd"
+
+# 把 WorkBuddy 自带的 PortableGit 加入 PATH
+if (-not (Test-Path "$gitBin\git.exe")) {
+    Write-Host "[错误] 找不到 git.exe：$gitBin\git.exe" -ForegroundColor Red
+    Read-Host "按 Enter 退出"
+    exit 1
+}
+$env:PATH = "$gitBin;" + $env:PATH
 
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "    gaokao-analyzer GitHub Push Helper" -ForegroundColor Cyan
