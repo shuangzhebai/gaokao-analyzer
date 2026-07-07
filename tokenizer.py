@@ -56,4 +56,7 @@ def tokenize(q: str) -> List[str]:
                     chunk = remaining[i:i + 2]
                     if chunk:
                         tokens.append(chunk)
-    return [t for t in tokens if len(t) >= 1]
+    # 清理 FTS5 特殊语法字符（防止注入攻击）
+    tokens = [re.sub(r'[^\w\u4e00-\u9fff]', ' ', t).strip() for t in tokens]
+    tokens = [t for t in tokens if len(t) >= 2]  # 过滤单字和空串
+    return tokens

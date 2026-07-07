@@ -512,7 +512,8 @@ class MonteCarloSimulator:
             try:
                 target_dist = skewnorm(a_param, loc=target_mean, scale=target_std)
                 target_quantiles = target_dist.ppf(np.linspace(0.005, 0.995, n))
-            except Exception:
+            except Exception as exc:
+                logger.warning("校准失败 (n=%d): %s — 使用未校准分位数", len(scores), exc)
                 target_quantiles = np.random.normal(target_mean, target_std, n)
                 target_quantiles.sort()
         else:

@@ -5,8 +5,10 @@ v5.1: 路由拆分(routes/*)、lifespan 改造(@asynccontextmanager)、异常安
 本文件只负责：创建 FastAPI 实例、注册 lifespan/异常处理器、装配路由、提供页面与健康检查。
 """
 import logging
+import os
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import VERSION
 from deps import get_auto_scraper
@@ -29,6 +31,34 @@ app = FastAPI(
 # 异常处理器（R-2：全局异常仅返回通用错误，不泄露内部路径/SQL）
 app.add_exception_handler(Exception, global_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
+
+
+# ============ 鉴权中间件 ============
+
+API_KEY = os.environ.get("API_KEY", "")
+EXEMPT_PATHS = {"/", "/api/health"}
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """可选的 API Key 鉴权中间件。
+
+    如果设置了环境变量 API_KEY，则所有 POST/DELETE/PUT 端点
+    （除白名单路径外）需要 Authorization: Bearer <API_KEY> header。
+    未设置 API_KEY 时，鉴权跳过（兼容单机使用）。
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        if API_KEY:
+            if request.method in ("POST", "DELETE", "PUT") and request.url.path not in EXEMPT_PATHS:
+                auth = request.headers.get("Authorization", "")
+                if not auth.startswith("Bearer ") or auth[len("Bearer "):] != API_KEY:
+                    return HTMLResponse(
+                        status_code=401,
+                        content="<h1>401 Unauthorized</h1><p>缺少或无效的 API Key</p>",
+                    )
+        response = await call_next(request)
+        return response
+
+app.add_middleware(AuthMiddleware)
 
 
 # ============ 页面路由 ============
@@ -57,7 +87,8 @@ async def health_check(db=Depends(get_db), auto_scraper=Depends(get_auto_scraper
             "auto_scraper_status": auto_scraper.get_status() if auto_scraper else None,
         }
     except Exception as e:  # noqa: BLE001
-        return {"status": "error", "message": str(e)}
+        logger.error("健康检查失败: %s", e)
+        return {"status": "error", "message": "服务暂不可用"}
 
 
 # ============ 装配路由 ============

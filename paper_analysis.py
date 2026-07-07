@@ -19,6 +19,7 @@
 import asyncio
 import logging
 import threading
+from collections import OrderedDict
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
@@ -31,6 +32,36 @@ from models import KNOWLEDGE_SEED
 from simulator import MonteCarloSimulator
 
 logger = logging.getLogger("gaokao")
+
+
+class LRUCache:
+    """有上限的 LRU 缓存，线程安全（maxsize=256）。"""
+    def __init__(self, maxsize: int = 256):
+        self.maxsize = maxsize
+        self._cache: OrderedDict = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, key):
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
+            return None
+
+    def put(self, key, value):
+        with self._lock:
+            self._cache[key] = value
+            self._cache.move_to_end(key)
+            if len(self._cache) > self.maxsize:
+                self._cache.popitem(last=False)
+
+    def __contains__(self, key):
+        with self._lock:
+            return key in self._cache
+
+    def __len__(self):
+        with self._lock:
+            return len(self._cache)
 
 
 class PaperAnalyzer:
@@ -53,10 +84,9 @@ class PaperAnalyzer:
         self.kp_mapper = kp_mapper or KnowledgeMapper()
         self.quality = quality_analyzer or QualityAnalyzer()
         self.simulator = simulator or MonteCarloSimulator()
-        # 缓存（线程安全）
-        self._fit_cache: Dict[str, Dict[int, dict]] = {}
-        self._kp_cache: Dict[tuple, List[str]] = {}
-        self._lock = threading.Lock()
+        # 缓存（LRU，有上限防无限增长）
+        self._fit_cache: LRUCache = LRUCache(maxsize=256)
+        self._kp_cache: LRUCache = LRUCache(maxsize=256)
 
     # ===================== 主入口 =====================
 
@@ -175,16 +205,15 @@ class PaperAnalyzer:
         return out
 
     def _map_kp(self, content: str, subject: str) -> List[str]:
-        """知识点映射（带缓存）。"""
+        """知识点映射（带 LRU 缓存，防止内存泄漏）。"""
         key = (subject, content)
         if self.use_cache:
-            with self._lock:
-                if key in self._kp_cache:
-                    return self._kp_cache[key]
+            cached = self._kp_cache.get(key)
+            if cached is not None:
+                return cached
         kps = self.kp_mapper.map_question(content or "", normalize_subject(subject))
         if self.use_cache:
-            with self._lock:
-                self._kp_cache[key] = kps
+            self._kp_cache.put(key, kps)
         return kps
 
     def _ensure_knowledge(self, questions: List[Dict[str, Any]], subject: str) -> None:
@@ -200,6 +229,7 @@ class PaperAnalyzer:
         - 若题目已带完整 IRT 参数：直接使用，跳过估计（快路径）。
         - 否则：用虚拟考生生成作答矩阵，逐题 L-BFGS-B 估计 IRT 参数。
         - 始终基于 ICC 重建 response_matrix，供正确率/区分度/信度计算（一致口径）。
+        - 缓存 IRT 拟合结果（LRU），避免重复计算。
         """
         n_q = len(questions)
         rng = np.random.default_rng(self.seed)
@@ -215,6 +245,19 @@ class PaperAnalyzer:
                 for q in questions
             ]
         else:
+            # 尝试从缓存读取
+            cache_key = (subject, n_q, self.irt_students, self.seed)
+            if self.use_cache:
+                cached = self._fit_cache.get(cache_key)
+                if cached is not None:
+                    item_params = cached
+                else:
+                    item_params = None
+                if item_params is not None:
+                    resp_rng = np.random.default_rng(self.seed)
+                    response_matrix = self._build_response(thetas, item_params, resp_rng)
+                    return item_params, response_matrix, thetas
+
             response_matrix = np.zeros((self.irt_students, n_q), dtype=int)
             for j, q in enumerate(questions):
                 q_type = q.get("q_type", "solve")
@@ -232,6 +275,10 @@ class PaperAnalyzer:
                 questions[j]["irt_a"] = p["a"]
                 questions[j]["irt_b"] = p["b"]
                 questions[j]["irt_c"] = p["c"]
+
+            # 写入缓存（LRU）
+            if self.use_cache:
+                self._fit_cache.put(cache_key, item_params)
 
         resp_rng = np.random.default_rng(self.seed)
         response_matrix = self._build_response(thetas, item_params, resp_rng)

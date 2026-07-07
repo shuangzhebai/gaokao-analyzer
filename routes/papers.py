@@ -152,7 +152,16 @@ async def upload_paper(
     dedup_engine=Depends(get_dedup_engine),
 ):
     os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-    save_path = os.path.join(DOWNLOAD_DIR, file.filename)
+    # 路径穿越防护：只取 basename，防止 ../ 等攻击
+    safe_filename = os.path.basename(file.filename or "")
+    if not safe_filename:
+        raise HTTPException(400, "文件名不能为空")
+    # 扩展名白名单
+    ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".html", ".json", ".md"}
+    ext = os.path.splitext(safe_filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"不允许的文件类型: {ext}，仅支持 {', '.join(sorted(ALLOWED_EXTENSIONS))}")
+    save_path = os.path.join(DOWNLOAD_DIR, safe_filename)
     content = await file.read()
     with open(save_path, "wb") as f:
         f.write(content)
@@ -171,6 +180,7 @@ async def upload_paper(
     dedup_result = await dedup_engine.check_duplicate(
         title=paper_title, subject_id=subject, year=year,
         questions=[{"content": q.content} for q in paper.questions] if paper.questions else [],
+        db=db,
     )
 
     if dedup_result["status"] == "duplicate":
@@ -446,7 +456,7 @@ async def batch_estimate_irt(
 @router.post("/api/papers/batch/simulate")
 async def batch_simulate(
     subject: Optional[str] = None,
-    n_students: Optional[int] = None,
+    n_students: Optional[int] = Query(None, le=500000),
     limit: int = 10,
     db: Connection = Depends(get_db),
     simulator=Depends(get_simulator),
@@ -561,7 +571,7 @@ async def estimate_irt(
 
 @router.post("/api/papers/{paper_id}/simulate")
 async def run_simulation(
-    paper_id: int, n_students: Optional[int] = None,
+    paper_id: int, n_students: Optional[int] = Query(None, le=500000),
     db: Connection = Depends(get_db),
     simulator=Depends(get_simulator),
 ):

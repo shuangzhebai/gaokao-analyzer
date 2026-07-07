@@ -4,6 +4,7 @@ Level 1: content_hash 快速比对 (O(1))
 Level 2: FTS5 标题相似搜索 (O(log n)) —— 复用 search.search_similar_titles 的 AND→OR→LIKE 降级
 Level 3: DeepSeek API 语义相似度 (按需调用)
 v5.1: 统一分词/查重降级策略(B-3)，_fts_check 与 search 保持一致
+v5.1-fix: DB 连接泄漏修复(B-3)，_hash_check/_fts_check 复用外部 db 连接
 """
 import hashlib
 import json
@@ -43,9 +44,12 @@ class DedupEngine:
 
     async def check_duplicate(self, title: str, subject_id: str, year: int,
                               questions: list = None, source_url: str = "",
-                              content_hash: str = "") -> dict:
+                              content_hash: str = "", db=None) -> dict:
         """
         三级查重检测
+
+        Args:
+            db: 可选的数据库连接；传则复用，不传则内部创建（防泄漏优化）
 
         Returns:
             {
@@ -59,12 +63,12 @@ class DedupEngine:
             content_hash = self.compute_content_hash(title, subject_id, year, questions)
 
         # Level 1: Hash 比对
-        hash_result = await self._hash_check(content_hash, source_url)
+        hash_result = await self._hash_check(content_hash, source_url, db=db)
         if hash_result["status"] == "duplicate":
             return hash_result
 
         # Level 2: FTS5 标题搜索（与 search 一致的降级策略）
-        fts_result = await self._fts_check(title, subject_id, year)
+        fts_result = await self._fts_check(title, subject_id, year, db=db)
         if not fts_result["similar_papers"]:
             return {"status": "unique", "similar_papers": [], "content_hash": content_hash}
 
@@ -77,84 +81,99 @@ class DedupEngine:
         # 无 DeepSeek 时，用标题相似度作为判断
         return fts_result
 
-    async def _hash_check(self, content_hash: str, source_url: str) -> dict:
-        """Level 1: 哈希快速比对"""
-        async for db in get_db():
-            # 检查内容哈希
-            if content_hash:
-                row = await db.execute_fetchone(
-                    "SELECT id, title FROM papers WHERE content_hash = ? LIMIT 1",
-                    (content_hash,),
-                )
-                if row:
-                    return {
-                        "status": "duplicate",
-                        "similar_papers": [{
-                            "paper_id": row["id"],
-                            "title": row["title"],
-                            "similarity": 1.0,
-                            "method": "hash",
-                        }],
-                        "content_hash": content_hash,
-                    }
+    async def _hash_check(self, content_hash: str, source_url: str, db=None) -> dict:
+        """Level 1: 哈希快速比对（支持复用外部 db 连接，防止连接泄漏）"""
+        if db is not None:
+            return await self._hash_check_impl(content_hash, source_url, db)
+        async for _db in get_db():
+            return await self._hash_check_impl(content_hash, source_url, _db)
 
-            # 检查 source_url
-            if source_url:
-                row = await db.execute_fetchone(
-                    "SELECT id, title FROM papers WHERE source_url = ? LIMIT 1",
-                    (source_url,),
-                )
-                if row:
-                    return {
-                        "status": "duplicate",
-                        "similar_papers": [{
-                            "paper_id": row["id"],
-                            "title": row["title"],
-                            "similarity": 1.0,
-                            "method": "url",
-                        }],
-                        "content_hash": content_hash,
-                    }
+    async def _hash_check_impl(self, content_hash: str, source_url: str, db) -> dict:
+        """Level 1: 哈希快速比对（内部实现，需传入 db 连接）"""
+        # 检查内容哈希
+        if content_hash:
+            row = await db.execute_fetchone(
+                "SELECT id, title FROM papers WHERE content_hash = ? LIMIT 1",
+                (content_hash,),
+            )
+            if row:
+                return {
+                    "status": "duplicate",
+                    "similar_papers": [{
+                        "paper_id": row["id"],
+                        "title": row["title"],
+                        "similarity": 1.0,
+                        "method": "hash",
+                    }],
+                    "content_hash": content_hash,
+                }
 
-            return {"status": "unique", "similar_papers": [], "content_hash": content_hash}
+        # 检查 source_url
+        if source_url:
+            row = await db.execute_fetchone(
+                "SELECT id, title FROM papers WHERE source_url = ? LIMIT 1",
+                (source_url,),
+            )
+            if row:
+                return {
+                    "status": "duplicate",
+                    "similar_papers": [{
+                        "paper_id": row["id"],
+                        "title": row["title"],
+                        "similarity": 1.0,
+                        "method": "url",
+                    }],
+                    "content_hash": content_hash,
+                }
 
-    async def _fts_check(self, title: str, subject_id: str, year: int) -> dict:
+        return {"status": "unique", "similar_papers": [], "content_hash": content_hash}
+
+    async def _fts_check(self, title: str, subject_id: str, year: int, db=None) -> dict:
         """Level 2: FTS5 标题相似搜索。
 
         复用 search.search_similar_titles 的「短语 → AND → OR → LIKE」降级策略，
         与搜索路径保持一致（B-3），避免查重召回率低于搜索。
+
+        Args:
+            db: 可选的数据库连接；传则复用，不传则内部创建（防泄漏优化）
         """
-        async for db in get_db():
-            rows = await search_similar_titles(db, title, subject_id, limit=5)
-            if not rows:
-                return {"status": "unique", "similar_papers": [], "content_hash": ""}
+        if db is not None:
+            return await self._fts_check_impl(title, subject_id, db)
+        async for _db in get_db():
+            return await self._fts_check_impl(title, subject_id, _db)
 
-            similar = []
-            for row in rows:
-                sim = self._title_similarity(title, row["title"])
-                if sim > 0.5:
-                    similar.append({
-                        "paper_id": row["id"],
-                        "title": row["title"],
-                        "similarity": round(sim, 3),
-                        "method": "fts",
-                    })
+    async def _fts_check_impl(self, title: str, subject_id: str, db) -> dict:
+        """Level 2: FTS5 标题相似搜索（内部实现，需传入 db 连接）"""
+        rows = await search_similar_titles(db, title, subject_id, limit=5)
+        if not rows:
+            return {"status": "unique", "similar_papers": [], "content_hash": ""}
 
-            # 按相似度排序
-            similar.sort(key=lambda x: x["similarity"], reverse=True)
+        similar = []
+        for row in rows:
+            sim = self._title_similarity(title, row["title"])
+            if sim > 0.5:
+                similar.append({
+                    "paper_id": row["id"],
+                    "title": row["title"],
+                    "similarity": round(sim, 3),
+                    "method": "fts",
+                })
 
-            if similar and similar[0]["similarity"] >= 0.9:
-                status = "duplicate"
-            elif similar and similar[0]["similarity"] >= 0.7:
-                status = "suspected"
-            else:
-                status = "unique"
+        # 按相似度排序
+        similar.sort(key=lambda x: x["similarity"], reverse=True)
 
-            return {
-                "status": status,
-                "similar_papers": similar,
-                "content_hash": "",
-            }
+        if similar and similar[0]["similarity"] >= 0.9:
+            status = "duplicate"
+        elif similar and similar[0]["similarity"] >= 0.7:
+            status = "suspected"
+        else:
+            status = "unique"
+
+        return {
+            "status": status,
+            "similar_papers": similar,
+            "content_hash": "",
+        }
 
     async def _deepseek_check(
         self, title: str, questions: list,

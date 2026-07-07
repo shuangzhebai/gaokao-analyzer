@@ -270,15 +270,70 @@ class SearchEngine:
         page: int = 1,
         size: int = 20,
     ) -> dict:
-        """题目全文搜索"""
+        """题目全文搜索（使用分词器降级策略与 FTS5 注入防护）"""
         async for db in get_db():
             conditions = []
             params = []
 
             if q and q.strip():
                 clean_q = q.strip().replace('"', '""')
-                conditions.append("qf.content MATCH ?")
-                params.append(f'"{clean_q}"')
+                # 先尝试短语匹配
+                fts_sql = """
+                    SELECT qf.rowid
+                    FROM questions_fts qf
+                    JOIN questions q ON qf.rowid = q.id
+                    JOIN papers p ON q.paper_id = p.id
+                    WHERE qf.content MATCH ?
+                """
+                try:
+                    rows = await db.execute_fetchall(fts_sql, [f'"{clean_q}"'], conditions)
+                    if not rows:
+                        # 短语无结果，尝试分词 AND/OR 降级
+                        tokens = tokenize(clean_q)
+                        if len(tokens) > 1:
+                            and_query = ' AND '.join(f'"{t}"' for t in tokens if len(t) >= 2)
+                            if and_query:
+                                rows = await db.execute_fetchall(fts_sql, [and_query], conditions)
+                        if not rows and len(tokens) > 1:
+                            or_query = ' OR '.join(f'"{t}"' for t in tokens if len(t) >= 2)
+                            if or_query:
+                                rows = await db.execute_fetchall(fts_sql, [or_query], conditions)
+                        if not rows:
+                            # 最终降级：LIKE 搜索
+                            like_conds = []
+                            like_params = []
+                            for t in tokens:
+                                if len(t) >= 2:
+                                    like_conds.append("q.content LIKE ?")
+                                    like_params.append(f"%{t}%")
+                            if like_conds:
+                                conditions.append("(" + " OR ".join(like_conds) + ")")
+                                params.extend(like_params)
+                            else:
+                                conditions.append("qf.content MATCH ?")
+                                params.append(f'"{clean_q}"')
+                        else:
+                            matched_ids = [r["rowid"] for r in rows]
+                            placeholders = ",".join("?" * len(matched_ids))
+                            conditions.append(f"q.id IN ({placeholders})")
+                            params.extend(matched_ids)
+                    else:
+                        matched_ids = [r["rowid"] for r in rows]
+                        placeholders = ",".join("?" * len(matched_ids))
+                        conditions.append(f"q.id IN ({placeholders})")
+                        params.extend(matched_ids)
+                except Exception:
+                    # FTS 异常时降级到 LIKE
+                    tokens = tokenize(clean_q)
+                    like_conds = []
+                    for t in tokens:
+                        if len(t) >= 2:
+                            like_conds.append("q.content LIKE ?")
+                            params.append(f"%{t}%")
+                    if like_conds:
+                        conditions.append("(" + " OR ".join(like_conds) + ")")
+                    else:
+                        conditions.append("1=0")
 
             if subject:
                 conditions.append("p.subject_id = ?")

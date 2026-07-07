@@ -605,13 +605,66 @@ body {
   margin-top: 12px;
 }
 
+/* ===== 移动端底部 Tab 导航栏 ===== */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 999;
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border-top: 0.5px solid var(--glass-border);
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+  padding: 6px 0 env(safe-area-inset-bottom, 8px);
+  justify-content: space-around;
+  align-items: center;
+  animation: fadeInUp 0.4s var(--ease-soft) both;
+}
+.bottom-nav .tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 10px;
+  color: var(--text-2);
+  font-weight: 500;
+  transition: var(--transition);
+  border: none;
+  background: none;
+  font-family: var(--font);
+  -webkit-tap-highlight-color: transparent;
+}
+.bottom-nav .tab-item:hover { color: var(--text-1); }
+.bottom-nav .tab-item.active {
+  color: var(--apple-blue);
+  transform: scale(1.05);
+}
+.bottom-nav .tab-item .tab-icon {
+  font-size: 20px;
+  line-height: 1;
+  display: block;
+}
+.bottom-nav .tab-item .tab-label {
+  font-size: 10px;
+  line-height: 1.2;
+}
+
 /* ===== 响应式 ===== */
 @media (max-width: 768px) {
   .sidebar { display: none; }
-  .content { padding: 16px; }
+  .content { padding: 16px; padding-bottom: 72px; }
   .stats-row { grid-template-columns: repeat(2, 1fr); }
   .chart-grid { grid-template-columns: 1fr; }
   .nav-search { max-width: 50vw; width: auto; }
+  .bottom-nav { display: flex; }
+}
+@media (min-width: 769px) {
+  .bottom-nav { display: none !important; }
 }
 
 /* ============================================================
@@ -938,7 +991,7 @@ html { scroll-behavior: smooth; }
             <label>关键词</label>
             <input type="text" id="collectKeyword" placeholder="如：深圳二模">
           </div>
-          <button class="nav-btn primary" onclick="startCollect()">&#9654; 开始采集</button>
+          <button class="nav-btn primary" onclick="startCollect(this)">&#9654; 开始采集</button>
         </div>
       </div>
       <div class="section-header">
@@ -974,12 +1027,32 @@ html { scroll-behavior: smooth; }
     <div class="page" id="page-audit">
       <div class="section-header">
         <div class="section-title">真实性审核</div>
-        <button class="nav-btn primary" onclick="runBatchAudit()">&#9654; 批量审核</button>
+        <button class="nav-btn primary" onclick="runBatchAudit(this)">&#9654; 批量审核</button>
       </div>
       <div class="stats-row" id="auditStats"></div>
       <div id="auditResults"></div>
     </div>
   </div>
+</div>
+
+<!-- 底部 Tab 导航（移动端） -->
+<div class="bottom-nav">
+  <button class="tab-item active" onclick="switchPage('dashboard')">
+    <span class="tab-icon">&#9733;</span>
+    <span class="tab-label">仪表盘</span>
+  </button>
+  <button class="tab-item" onclick="switchPage('papers')">
+    <span class="tab-icon">&#128196;</span>
+    <span class="tab-label">试卷</span>
+  </button>
+  <button class="tab-item" onclick="document.getElementById('globalSearch').focus();switchPage('papers')">
+    <span class="tab-icon">&#128269;</span>
+    <span class="tab-label">搜索</span>
+  </button>
+  <button class="tab-item" onclick="switchPage('audit')">
+    <span class="tab-icon">&#9881;</span>
+    <span class="tab-label">设置</span>
+  </button>
 </div>
 
 <!-- Toast 容器 -->
@@ -991,6 +1064,8 @@ let currentPage = 'dashboard';
 let searchPage = 1;
 let currentSubject = '';
 const PAGE_SIZE = 20;
+// 全局 Chart 实例引用（用于 renderCharts 销毁防泄漏）
+let distChart, kpChart;
 
 // ===== API 工具 =====
 async function api(url, opts = {}) {
@@ -1031,6 +1106,13 @@ function switchPage(page, data) {
   const pages = ['dashboard','papers','collect','docs','audit'];
   const idx = pages.indexOf(page);
   if (idx >= 0) document.querySelectorAll('.sidebar-item')[idx]?.classList.add('active');
+
+  // 底部导航 tab 激活同步
+  document.querySelectorAll('.bottom-nav .tab-item').forEach(i => i.classList.remove('active'));
+  const tabMap = {dashboard:0, papers:1, audit:3};
+  if (page in tabMap) {
+    document.querySelectorAll('.bottom-nav .tab-item')[tabMap[page]]?.classList.add('active');
+  }
 
   if (page === 'dashboard') loadDashboard();
   else if (page === 'papers') searchPapers();
@@ -1091,7 +1173,7 @@ async function fetchSuggestions(q) {
     } else {
       box.classList.remove('show');
     }
-  } catch {}
+  } catch (e) { showToast("搜索建议加载失败", "error"); }
 }
 
 async function searchPapers() {
@@ -1251,7 +1333,7 @@ async function loadDashboard() {
     } else {
       lp.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128230;</div><div class="empty-text">暂无试卷</div><div class="empty-hint">前往采集站开始采集数据</div></div>';
     }
-  } catch {}
+  } catch (e) { showToast("仪表盘加载失败", "error"); }
 }
 
 // ===== 试卷详情 =====
@@ -1296,12 +1378,12 @@ async function loadDetail(paperId) {
         </div>
         ${regionHtml}
         <div style="display:flex;gap:10px;margin-top:16px">
-          <button class="nav-btn primary" onclick="runIRT(${p.id})" ${p.analysis_status!=='pending'&&p.analysis_status!=='parsed'?'disabled':''}>IRT 分析</button>
-          <button class="nav-btn primary" onclick="runSimulate(${p.id})" ${p.analysis_status!=='irt_estimated'?'disabled':''}>成绩模拟</button>
-          <button class="nav-btn secondary" onclick="runCurriculum(${p.id})">课标分析</button>
-          <button class="nav-btn secondary" onclick="runQuality(${p.id})">质量评估</button>
-          <button class="nav-btn primary" onclick="runPaperAnalysis(${p.id})">&#128202; 质量分析报告</button>
-          <button class="nav-btn secondary" onclick="auditOnePaper(${p.id})">真实性审核</button>
+          <button class="nav-btn primary" onclick="runIRT(${p.id}, this)" ${p.analysis_status!=='pending'&&p.analysis_status!=='parsed'?'disabled':''}>IRT 分析</button>
+          <button class="nav-btn primary" onclick="runSimulate(${p.id}, this)" ${p.analysis_status!=='irt_estimated'?'disabled':''}>成绩模拟</button>
+          <button class="nav-btn secondary" onclick="runCurriculum(${p.id}, this)">课标分析</button>
+          <button class="nav-btn secondary" onclick="runQuality(${p.id}, this)">质量评估</button>
+          <button class="nav-btn primary" onclick="runPaperAnalysis(${p.id}, this)">&#128202; 质量分析报告</button>
+          <button class="nav-btn secondary" onclick="auditOnePaper(${p.id}, this)">真实性审核</button>
         </div>
       </div>
       <div class="section-header"><div class="section-title">题目列表 (${data.questions.length}题)</div></div>
@@ -1335,10 +1417,14 @@ async function loadDetail(paperId) {
     if (data.analyses.length) {
       setTimeout(() => renderCharts(data), 100);
     }
-  } catch {}
+  } catch (e) { showToast("试卷详情加载失败：" + e.message, "error"); }
 }
 
 function renderCharts(data) {
+  // 销毁旧 Chart 实例防内存泄漏
+  if (typeof distChart !== 'undefined' && distChart) { distChart.destroy(); distChart = null; }
+  if (typeof kpChart !== 'undefined' && kpChart) { kpChart.destroy(); kpChart = null; }
+
   const analysis = data.analyses[data.analyses.length - 1];
   if (!analysis) return;
 
@@ -1346,7 +1432,7 @@ function renderCharts(data) {
   if (simJson && simJson.score_distribution) {
     const ctx = document.getElementById('distChart')?.getContext('2d');
     if (ctx) {
-      new Chart(ctx, {
+      distChart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: simJson.score_distribution.map(d => d.range),
@@ -1402,48 +1488,58 @@ function renderCharts(data) {
 }
 
 // ===== 分析操作 =====
-async function runIRT(paperId) {
+async function runIRT(paperId, btn) {
+  if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始 IRT 参数估计...', 'info');
   try {
     const data = await api(`/api/papers/${paperId}/estimate-irt`, {method:'POST'});
     showToast(`IRT 估计完成，${data.estimated} 道题`, 'success');
     loadDetail(paperId);
-  } catch {}
+  } catch (e) { showToast("IRT 分析失败：" + e.message, "error"); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || 'IRT 分析'; } }
 }
-async function runSimulate(paperId) {
+async function runSimulate(paperId, btn) {
+  if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始成绩模拟（已校准至官方数据）...', 'info');
   try {
     const data = await api(`/api/papers/${paperId}/simulate`, {method:'POST'});
     showToast(`模拟完成，均分 ${data.mean}`, 'success');
     loadDetail(paperId);
-  } catch {}
+  } catch (e) { showToast("成绩模拟失败：" + e.message, "error"); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '成绩模拟'; } }
 }
-async function runCurriculum(paperId) {
+async function runCurriculum(paperId, btn) {
+  if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始课标分析...', 'info');
   try {
     const data = await api(`/api/papers/${paperId}/curriculum-analysis`, {method:'POST'});
     showToast(`课标契合度: ${data.curriculum_score?.toFixed(1) || '完成'}`, 'success');
     loadDetail(paperId);
-  } catch {}
+  } catch (e) { showToast("课标分析失败：" + e.message, "error"); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '课标分析'; } }
 }
-async function runQuality(paperId) {
+async function runQuality(paperId, btn) {
+  if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始质量评估...', 'info');
   try {
     const data = await api(`/api/papers/${paperId}/quality-analysis`, {method:'POST'});
     showToast(`质量评分: ${data.overall_score?.toFixed(1) || '完成'}`, 'success');
     loadDetail(paperId);
-  } catch {}
+  } catch (e) { showToast("质量评估失败：" + e.message, "error"); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '质量评估'; } }
 }
-async function auditOnePaper(paperId) {
+async function auditOnePaper(paperId, btn) {
+  if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始真实性审核...', 'info');
   try {
     const data = await api(`/api/audit/paper/${paperId}`, {method:'POST'});
     showToast(`审核完成: ${data.grade}级 (${data.score}分)`, data.score>=75?'success':'error');
-  } catch {}
+  } catch (e) { showToast("审核失败：" + e.message, "error"); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '真实性审核'; } }
 }
 
 // ===== 采集 =====
-async function startCollect() {
+async function startCollect(btn) {
   const year = document.getElementById('collectYear').value;
   const subject = document.getElementById('collectSubject').value;
   const keyword = document.getElementById('collectKeyword').value;
@@ -1452,12 +1548,14 @@ async function startCollect() {
   if (subject) params.set('subjects', subject);
   if (keyword) params.set('keyword', keyword);
 
+  if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "采集中..."; btn._origText = _t; }
   showToast('开始采集...', 'info');
   try {
     const data = await api(`/api/scrape/collect?${params}`, {method:'POST'});
     showToast(`采集完成：发现 ${data.found} 份，保存 ${data.saved} 份，跳过重复 ${data.skipped_duplicates} 份`, 'success');
     loadCollectStatus();
-  } catch {}
+  } catch (e) { showToast("采集失败：" + e.message, "error"); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '开始采集'; } }
 }
 
 async function loadCollectStatus() {
@@ -1507,7 +1605,7 @@ async function loadCollectStatus() {
     } else {
       logs.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128203;</div><div class="empty-text">暂无采集日志</div></div>';
     }
-  } catch {}
+  } catch (e) { showToast("采集状态加载失败", "error"); }
 }
 
 // ===== 官方文件库 =====
@@ -1543,7 +1641,7 @@ async function loadDocs() {
         </div>
       `).join('');
     }
-  } catch {}
+  } catch (e) { showToast("文件库加载失败", "error"); }
 }
 
 async function refreshDocs() {
@@ -1552,7 +1650,7 @@ async function refreshDocs() {
     const data = await api('/api/official-docs/refresh', {method:'POST'});
     showToast(`刷新完成: 发现 ${data.found} 篇, 新增 ${data.added} 篇`, 'success');
     loadDocs();
-  } catch {}
+  } catch (e) { showToast("刷新失败：" + e.message, "error"); }
 }
 
 // ===== 真实性审核 =====
@@ -1565,16 +1663,18 @@ async function loadAuditPage() {
       <div class="stat-card green"><div class="stat-icon">&#9989;</div><div class="stat-value">${data.verified_papers}</div><div class="stat-label">已验证</div></div>
       <div class="stat-card orange"><div class="stat-icon">&#9888;</div><div class="stat-value">${data.unverified_papers}</div><div class="stat-label">未验证</div></div>
     `;
-  } catch {}
+  } catch (e) { showToast("审核页面加载失败", "error"); }
 }
 
-async function runBatchAudit() {
+async function runBatchAudit(btn) {
+  if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "批量审核中..."; btn._origText = _t; }
   showToast('开始批量审核...', 'info');
   try {
     const data = await api('/api/audit/batch?limit=50', {method:'POST'});
     showToast(`审核完成: ${data.total_audited} 份 (A:${data.grade_distribution.A||0} B:${data.grade_distribution.B||0} C:${data.grade_distribution.C||0} D:${data.grade_distribution.D||0})`, 'success');
     loadAuditPage();
-  } catch {}
+  } catch (e) { showToast("批量审核失败：" + e.message, "error"); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '批量审核'; } }
 }
 
 // ===== 试卷质量分析报告（消费 /api/papers/{id}/analyze 与 /report） =====
@@ -1591,7 +1691,8 @@ const DIM_LABELS = {
 let analysisCharts = {};
 
 // 生成报告（POST /api/papers/{id}/analyze）
-async function runPaperAnalysis(paperId) {
+async function runPaperAnalysis(paperId, btn) {
+  if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "生成中..."; btn._origText = _t; }
   const container = document.getElementById('analysisReport');
   if (!container) return;
   container.innerHTML = renderAnalysisSkeleton();
@@ -1604,6 +1705,7 @@ async function runPaperAnalysis(paperId) {
   } catch (e) {
     if (container) container.innerHTML = renderAnalysisError(paperId);
   }
+  finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '质量分析报告'; } }
 }
 
 // 加载已存报告（GET /api/papers/{id}/report）
@@ -1853,8 +1955,8 @@ async function init() {
       (cats || []).forEach(c => {
         catSel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
       });
-    } catch {}
-  } catch {}
+    } catch (e) { console.error("官方文件分类加载失败:", e); }
+  } catch (e) { console.error("初始化失败:", e); }
 
   loadDashboard();
 }
