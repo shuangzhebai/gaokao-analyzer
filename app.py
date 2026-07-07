@@ -12,6 +12,9 @@ from config import VERSION
 from deps import get_auto_scraper
 from errors import global_exception_handler, http_exception_handler
 from lifespan import create_lifespan
+# 导入教育站点适配器（导入即触发 AdapterRegistry.register，scraper 构造时可见）
+import edu_source_adapters  # noqa: F401 — 注册 xueke_wang / zujuan_wang 适配器
+
 from models import get_db
 from routes import analysis, audit, dedup, official_docs, papers, scrape, search
 

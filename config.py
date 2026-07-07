@@ -457,17 +457,61 @@ DATA_SOURCES = [
         "rate_limit": 3,        # 同域最小间隔（秒）
         "respect_robots": True,
     },
-    # 新增数据源示例（真实站点，默认关闭）：
-    # {
-    #     "id": "zxxk_web",
-    #     "name": "学科网（网页适配器）",
-    #     "adapter_type": "generic_web",
-    #     "enabled": False,
-    #     "priority": "A",
-    #     "base_url": "https://www.zxxk.com",
-    #     "search_path": "/soft/search.aspx?keyword={keyword}&page=1",
-    #     "selectors": {"list_item": ".resource-item", "question_block": ".question"},
-    # },
+    # ============================================================
+    # 真实教育站点数据源（默认关闭，需用户配置 cookies/凭证后启用）
+    # ============================================================
+    {
+        "id": "xueke_wang",
+        "name": "学科网 - www.zxxk.com",
+        "adapter_type": "xueke_wang",       # edu_source_adapters.XueKeWangAdapter
+        "enabled": False,                    # 需登录态，默认关闭
+        "priority": "A",
+        "base_url": "https://www.zxxk.com",
+        "zujuan_base": "https://zujuan.xkw.com",
+        "search_path": "/soft/search.aspx?keyword={keyword}",
+        "selectors": {
+            "list_item": "a.resource-item, .paper-list a, .search-result a",
+            "question_block": ".question-item, .exam-question, .q-box",
+            "options": ".option, .options li",
+            "answer": ".answer, .correct-answer",
+            "score": ".score, .fraction",
+        },
+        "cookies": "",                       # 填入你浏览器登录后的 Cookie 字符串
+        "rate_limit": 5,                     # 学科网限频更严，间隔 5 秒
+        "auth_required": True,
+        "respect_robots": True,
+    },
+    {
+        "id": "zujuan_wang",
+        "name": "组卷网 - www.zujuan.com",
+        "adapter_type": "zujuan_wang",       # edu_source_adapters.ZuJuanWangAdapter
+        "enabled": False,                    # 需登录态，默认关闭
+        "priority": "A",
+        "base_url": "https://www.zujuan.com",
+        "search_path": "/search?q={keyword}&page=1",
+        "subject_mapping": {
+            "math": "math",
+            "chinese": "chinese",
+            "english": "english",
+            "physics": "physics",
+            "chemistry": "chemistry",
+            "biology": "biology",
+            "history": "history",
+            "geography": "geography",
+            "politics": "politics",
+        },
+        "selectors": {
+            "list_item": ".paper-item, .exam-item, .resource-card, a[href*='paper']",
+            "question_block": ".question, .exam-question, .q-container",
+            "options": ".option-item, .option",
+            "answer": "span.answer, .correct, .key",
+            "score": ".score, .fraction, .mark",
+        },
+        "cookies": "",                       # 填入你浏览器登录后的 Cookie 字符串
+        "rate_limit": 5,
+        "auth_required": True,
+        "respect_robots": True,
+    },
 ]
 
 # --- 反爬 / 网络策略（默认安全，不过度请求）---
