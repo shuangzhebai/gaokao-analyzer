@@ -1072,6 +1072,8 @@ let currentSubject = '';
 const PAGE_SIZE = 20;
 // 全局 Chart 实例引用（用于 renderCharts 销毁防泄漏）
 let distChart, kpChart;
+// 考试标签（硬编码默认值，可由 loadExamTags 覆写）
+let examTags = ["一模","二模","三模","省质检","联考","月考","适应性考试","省统考"];
 
 // ===== API 工具 =====
 async function api(url, opts = {}) {
@@ -1920,7 +1922,30 @@ function renderAnalysisCharts(report) {
 }
 
 // ===== 初始化 =====
+// 从 API 加载远端考试标签，回退硬编码
+async function loadExamTags() {
+    try {
+        const resp = await fetch('/api/filters');
+        const data = await resp.json();
+        if (data.exam_tags && data.exam_tags.length > 0) {
+            examTags = data.exam_tags;
+        }
+    } catch (e) {
+        // 保持硬编码值
+    }
+}
+
 async function init() {
+  // 优先从 API 加载考试标签（异步，不阻塞后续初始化）
+  loadExamTags().then(() => {
+    // API 返回后重填考试标签下拉
+    const tagSel = document.getElementById('filterExamTag');
+    tagSel.innerHTML = '<option value="">全部考试</option>';
+    examTags.forEach(t => {
+      tagSel.innerHTML += `<option value="${t}">${t}</option>`;
+    });
+  }).catch(() => {/* 保持硬编码值已就绪 */});
+
   try {
     const filters = await api('/api/filters');
     const subjectSel = document.getElementById('filterSubject');
@@ -1937,8 +1962,7 @@ async function init() {
       document.getElementById('filterProvince').innerHTML += `<option value="${p}">${p}</option>`;
     });
 
-    // 考试标签筛选
-    const examTags = ["一模","二模","三模","省质检","联考","月考","适应性考试","省统考"];
+    // 考试标签筛选（先用硬编码填充，loadExamTags 异步覆写）
     examTags.forEach(t => {
       document.getElementById('filterExamTag').innerHTML += `<option value="${t}">${t}</option>`;
     });
