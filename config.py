@@ -554,7 +554,8 @@ ANALYSIS_CONFIG = {
 }
 
 # 6 维度 -> 综合质量分权重（权重和=1）
-ANALYSIS_WEIGHTS = {
+# P1-03: 权重可通过 env 变量覆盖（逗号分隔的 "dimension:weight" 对）
+ANALYSIS_WEIGHTS: dict[str, float] = {
     "difficulty": 0.15,
     "knowledge_coverage": 0.20,
     "type_distribution": 0.15,
@@ -562,6 +563,15 @@ ANALYSIS_WEIGHTS = {
     "reliability": 0.15,
     "validity": 0.15,
 }
+# 允许运行时通过环境变量调整权重
+_weights_override = os.environ.get("ANALYSIS_WEIGHTS_OVERRIDE", "")
+if _weights_override:
+    try:
+        for pair in _weights_override.split(","):
+            dim, w = pair.strip().split(":")
+            ANALYSIS_WEIGHTS[dim.strip()] = float(w.strip())
+    except Exception:
+        pass  # 格式错误时忽略
 
 # 题型预设分值占比（与标准高考卷对照，用于题型分布偏离度评估）
 QUESTION_TYPE_PRESET = {

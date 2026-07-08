@@ -88,6 +88,13 @@ async def get_cache_service(request: Request) -> Any:
     return get_cache()
 
 
+async def get_analyzer_registry(request: Request) -> Any:
+    """P1-03: 分析器注册表实例。"""
+    from analyzers import AnalyzerRegistry
+
+    return AnalyzerRegistry
+
+
 # ============ 原有引擎依赖注入（保持不变） ============
 
 def get_scraper_manager(request: Request) -> Any:
