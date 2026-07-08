@@ -58,6 +58,19 @@ services:
       - meili_data:/meili_data
     restart: unless-stopped
 
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: gaokao
+      POSTGRES_USER: gaokao
+      POSTGRES_PASSWORD: gaokao
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
 volumes:
   redis_data:
   meili_data:
+  pg_data:
