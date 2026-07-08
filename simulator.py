@@ -19,6 +19,36 @@ from scipy import stats
 from scipy.stats import skewnorm
 
 from config import FIT_WEIGHTS, MC_CONFIG, GRADE_ASSIGNMENT_RULES, CALIBRATION_DATA
+
+# P1-05: Numba JIT 加速（可选，未安装时自动降级）
+_HAS_NUMBA = False
+try:
+    from numba import njit as _real_njit
+
+    _HAS_NUMBA = True
+
+    @_real_njit(cache=True)  # type: ignore[misc]
+    def _compute_prob_matrix_numba(thetas, a_vals, b_vals, c_vals):
+        """Numba 加速的 ICC 概率矩阵计算。"""
+        n = len(thetas)
+        m = len(a_vals)
+        prob = np.zeros((n, m))
+        for j in range(m):
+            for i in range(n):
+                logit = a_vals[j] * (thetas[i] - b_vals[j])
+                if logit >= 0:
+                    prob[i, j] = c_vals[j] + (1.0 - c_vals[j]) / (1.0 + np.exp(-logit))
+                else:
+                    exp_logit = np.exp(logit)
+                    prob[i, j] = c_vals[j] + (1.0 - c_vals[j]) * exp_logit / (1.0 + exp_logit)
+        return prob
+
+except ImportError:
+    _HAS_NUMBA = False
+
+logger = logging.getLogger("simulator")
+if _HAS_NUMBA:
+    logger.info("Numba JIT 加速已启用（_compute_prob_matrix_numba）")
 from analyzer import IRTModel, KnowledgeMapper, QualityAnalyzer
 
 logger = logging.getLogger("gaokao")
@@ -194,12 +224,18 @@ class MonteCarloSimulator:
             thetas = np.concatenate([thetas_main, thetas_weak, thetas_strong])
             rng.shuffle(thetas)
 
-        # IRT 模拟作答
-        prob_matrix = np.zeros((n, n_questions))
-        for j, params in enumerate(item_params):
-            prob_matrix[:, j] = self.irt.icc_vectorized(
-                thetas, params["a"], params["b"], params["c"]
-            )
+        # IRT 模拟作答（P1-05: Numba JIT 加速可选）
+        if _HAS_NUMBA:
+            a_vals = np.array([p["a"] for p in item_params])
+            b_vals = np.array([p["b"] for p in item_params])
+            c_vals = np.array([p.get("c", 0.0) for p in item_params])
+            prob_matrix = _compute_prob_matrix_numba(thetas, a_vals, b_vals, c_vals)
+        else:
+            prob_matrix = np.zeros((n, n_questions))
+            for j, params in enumerate(item_params):
+                prob_matrix[:, j] = self.irt.icc_vectorized(
+                    thetas, params["a"], params["b"], params["c"]
+                )
 
         random_vals = rng.random((n, n_questions))
         response_matrix = (random_vals < prob_matrix).astype(int)
