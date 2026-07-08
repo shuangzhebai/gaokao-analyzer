@@ -13,7 +13,7 @@ logger = logging.getLogger("gaokao")
 # ============ 版本化迁移（T01：防清空数据） ============
 
 # 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
-CURRENT_SCHEMA_VERSION = 2
+CURRENT_SCHEMA_VERSION = 3
 
 
 async def _ensure_schema_migrations(db) -> None:
@@ -84,10 +84,33 @@ async def _migrate_to_v2(db) -> None:
     )
 
 
+async def _migrate_to_v3(db) -> None:
+    """阶段三迁移 v3：新增 audit_log 操作审计日志表，幂等。"""
+    await db.execute(
+        """CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user TEXT NOT NULL DEFAULT 'anonymous',
+            action TEXT NOT NULL,
+            resource_type TEXT NOT NULL,
+            resource_id TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
+            detail TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user)")
+    await db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id)"
+    )
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at)")
+
+
 # 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
 MIGRATIONS = {
     1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
     2: ("phase2: 新增 paper_reports 报告表", _migrate_to_v2),
+    3: ("phase3: 新增 audit_log 操作审计日志表", _migrate_to_v3),
 }
 
 
@@ -445,6 +468,22 @@ CREATE TABLE IF NOT EXISTS paper_reports (
 );
 
 CREATE INDEX IF NOT EXISTS idx_paper_reports_paper ON paper_reports(paper_id);
+
+-- v3: 操作审计日志（与 verification_audit 试卷真实性审核完全独立）
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user TEXT NOT NULL DEFAULT 'anonymous',
+    action TEXT NOT NULL,            -- POST / PUT / DELETE
+    resource_type TEXT NOT NULL,     -- 'paper', 'question', 'analysis', 'user', etc.
+    resource_id TEXT,                -- 被操作资源的 ID（字符串兼容）
+    ip_address TEXT,
+    user_agent TEXT,
+    detail TEXT,                     -- JSON 格式额外上下文
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user);
+CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
 """
 
 

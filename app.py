@@ -12,7 +12,7 @@ from fastapi.responses import HTMLResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import VERSION
-from deps import get_auto_scraper
+from deps import get_auto_scraper, get_audit_service
 from errors import global_exception_handler, http_exception_handler
 from lifespan import create_lifespan
 # 导入教育站点适配器（导入即触发 AdapterRegistry.register，scraper 构造时可见）
@@ -95,6 +95,54 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     return response
+
+
+# ============ 操作审计日志中间件 ============
+# 审计 POST/PUT/DELETE 请求，自动记录操作者、资源、IP、UA 到 audit_log 表。
+# 审计失败绝不阻塞用户请求——仅打印警告日志。
+# 放在安全头之后、路由/限速之前，确保所有写操作均被记录。
+
+@app.middleware("http")
+async def audit_log_middleware(request: Request, call_next):
+    """审计 POST/PUT/DELETE 请求，不阻塞正常响应。"""
+    if request.method in ("POST", "PUT", "DELETE"):
+        skip_paths = ['/api/health', '/api/docs', '/api/openapi.json']
+        if not any(p in request.url.path for p in skip_paths):
+            response = await call_next(request)
+            try:
+                audit_service = await get_audit_service(request)
+                import aiosqlite
+                from config import DB_PATH
+                db = await aiosqlite.connect(DB_PATH)
+                db.row_factory = aiosqlite.Row
+                try:
+                    # 提取当前用户（JWT 上线前回退 anonymous，T05 后自动完善）
+                    user = "anonymous"
+                    if hasattr(request.state, 'user') and request.state.user:
+                        user = request.state.user.get('username', 'anonymous')
+
+                    # 从路径推断资源类型与资源 ID
+                    path_parts = request.url.path.strip('/').split('/')
+                    resource_type = path_parts[-2] if len(path_parts) >= 2 else 'unknown'
+                    resource_id = path_parts[-1] if path_parts[-1].isdigit() else None
+
+                    await audit_service.log(
+                        db=db,
+                        user=user,
+                        action=request.method,
+                        resource_type=resource_type,
+                        resource_id=resource_id,
+                        ip_address=request.client.host if request.client else None,
+                        user_agent=request.headers.get("user-agent"),
+                    )
+                    await db.commit()
+                finally:
+                    await db.close()
+            except Exception as e:  # noqa: BLE001
+                # 审计失败绝不阻塞请求——仅记日志警告
+                print(f"[audit] log failed: {e}")
+            return response
+    return await call_next(request)
 
 
 # ============ API 速率限制（slowapi，全局默认 + 优雅降级） ============

@@ -14,16 +14,19 @@ from app_context import AppContext
 from repositories.paper_repo import PaperRepository
 from repositories.question_repo import QuestionRepository
 from repositories.analysis_repo import AnalysisRepository
+from repositories.audit_repo import AuditRepository
 
 from services.paper_service import PaperService
 from services.analysis_service import AnalysisService
 from services.scrape_service import ScrapeService
 from services.filter_service import FilterService
+from services.audit_service import AuditService
 
 # ============ Repository 单例（无状态，可跨请求复用） ============
 repo_paper = PaperRepository()
 repo_question = QuestionRepository()
 repo_analysis = AnalysisRepository()
+repo_audit = AuditRepository()
 
 
 # ============ Service 惰性初始化（防止 lifespan 之前被意外调用） ============
@@ -62,6 +65,12 @@ async def get_filter_service(request: Request) -> FilterService:
             paper_repo=repo_paper,
         )
     return request.app.state.filter_service
+
+
+async def get_audit_service(request: Request) -> AuditService:
+    if not hasattr(request.app.state, 'audit_service'):
+        request.app.state.audit_service = AuditService(audit_repo=repo_audit)
+    return request.app.state.audit_service
 
 
 # ============ 原有引擎依赖注入（保持不变） ============

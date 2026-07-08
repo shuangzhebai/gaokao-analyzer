@@ -1,0 +1,69 @@
+sequenceDiagram
+    participant Client
+    participant Router as routes/papers.py
+    participant Service as services/paper_service.py
+    participant Repo as repositories/paper_repo.py
+    participant DB as SQLite
+
+    Client->>Router: GET /api/v1/papers?subject=math&page=1&size=20
+    Router->>Router: 参数校验（page≥1, size≤100）
+    Router->>Service: PaperService.list_papers(subject="math", page=1, size=20)
+    Service->>Repo: PaperRepository.list_papers(db, subject, page, size)
+    Repo->>DB: SELECT COUNT(*) ... + SELECT * FROM papers ... LIMIT ? OFFSET ?
+    DB-->>Repo: [{dict}, ...]
+    Repo-->>Service: {"total": N, "page": 1, "size": 20, "data": [...]}
+    Service-->>Router: {"total": N, "page": 1, "size": 20, "data": [...]}
+    Router-->>Client: JSON Response (200)
+
+    Note over Client, DB: ===== 试卷上传（写操作） =====
+
+    Client->>Router: POST /api/v1/papers/upload (multipart: file + metadata)
+    Router->>Router: 文件校验（大小、扩展名、路径穿越）
+    Router->>Service: PaperService.upload_paper(file, metadata)
+    Service->>Engine: paper_parser.parse_file(save_path, subject)
+    Engine-->>Service: Paper 对象
+    Service->>Dedup: dedup_engine.check_duplicate(title, questions, db)
+    Dedup-->>Service: {"status": "unique", "content_hash": "...", "similar_papers": []}
+    Service->>PaperRepo: create(db, paper_data)
+    PaperRepo->>DB: INSERT INTO papers ...
+    DB-->>PaperRepo: lastrowid=42
+    Service->>QRepo: create_batch(db, 42, questions)
+    QRepo->>DB: INSERT INTO questions ... (批量)
+    Service->>DB: await db.commit()
+    Service-->>Router: {"paper_id": 42, ...}
+    Router-->>Client: JSON Response (201)
+
+    Note over Client, DB: ===== JWT 登录 + RBAC 校验 =====
+
+    Client->>AuthRouter: POST /api/v1/auth/login (username, password)
+    AuthRouter->>AuthSvc: AuthService.login(username, password)
+    AuthSvc->>UserRepo: get_by_username(db, username)
+    UserRepo->>DB: SELECT * FROM users WHERE username=?
+    DB-->>UserRepo: {id:1, username:"zhangsan", password_hash:"$2b$..."}
+    UserRepo-->>AuthSvc: user dict
+    AuthSvc->>AuthSvc: passlib.verify(password, hash)
+    AuthSvc->>AuthSvc: python-jose encode JWT
+    AuthSvc-->>AuthRouter: {"access_token": "eyJ...", "token_type": "bearer"}
+    AuthRouter-->>Client: 200 {access_token, token_type}
+
+    Note over Client, DB: ===== 后续请求（JWT 鉴权） =====
+
+    Client->>App: GET /api/v1/papers (Authorization: Bearer eyJ...)
+    App->>App: JWT 中间件解析 token
+    App->>App: 验证签名 + 过期时间
+    App->>App: 提取 role="teacher"
+    App->>TargetRouter: request.state.user = {id:1, role:"teacher"}
+    TargetRouter->>TargetRouter: (路由正常处理)
+    TargetRouter-->>Client: 200 OK
+
+    Note over Client, DB: ===== 审计日志中间件 =====
+
+    Client->>AuditMW: DELETE /api/v1/papers/42
+    Note over AuditMW: 方法为 DELETE → 需审计
+    AuditMW->>AuditMW: 提取 user (from JWT/API Key), IP, UA
+    AuditMW->>Router: await call_next(request)
+    Router-->>AuditMW: Response (200)
+    AuditMW->>AuditRepo: create(db, {user, action, resource, ...})
+    AuditRepo->>DB: INSERT INTO audit_log ...
+    AuditMW-->>Client: Response (200)
+    Note over AuditMW: 审计在响应之后异步写入，不阻塞
