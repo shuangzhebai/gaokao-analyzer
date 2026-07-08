@@ -4,6 +4,7 @@ v5.1: 新增 official_docs、verification_audit 表；引入 schema_migrations �
 """
 import aiosqlite
 import logging
+from typing import Any
 
 from config import DB_PATH
 
@@ -16,7 +17,7 @@ logger = logging.getLogger("gaokao")
 CURRENT_SCHEMA_VERSION = 3
 
 
-async def _ensure_schema_migrations(db) -> None:
+async def _ensure_schema_migrations(db: Any) -> None:
     """确保迁移记录表存在。"""
     await db.execute(
         """CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -27,7 +28,7 @@ async def _ensure_schema_migrations(db) -> None:
     )
 
 
-async def _get_applied_version(db) -> int:
+async def _get_applied_version(db: Any) -> int:
     """读取已应用的最高 schema 版本（无记录返回 0）。"""
     try:
         row = await db.execute_fetchone("SELECT MAX(version) AS v FROM schema_migrations")
@@ -36,7 +37,7 @@ async def _get_applied_version(db) -> int:
         return 0
 
 
-async def _add_column_if_missing(db, table: str, column: str, definition: str) -> None:
+async def _add_column_if_missing(db: Any, table: str, column: str, definition: str) -> None:
     """若表中缺少某列，则增量 ALTER 添加（幂等，不删库、不丢数据）。"""
     cursor = await db.execute(f"PRAGMA table_info({table})")
     cols = [r[1] for r in await cursor.fetchall()]
@@ -44,7 +45,7 @@ async def _add_column_if_missing(db, table: str, column: str, definition: str) -
         await db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
-async def _migrate_to_v1(db) -> None:
+async def _migrate_to_v1(db: Any) -> None:
     """基线迁移 v1（v5.1）。
 
     对已有旧版（v4.x）数据库补齐 v5.x 新增列；新库已由 SCHEMA 的
@@ -66,7 +67,7 @@ async def _migrate_to_v1(db) -> None:
     await _add_column_if_missing(db, "questions", "similar_to", "INTEGER")
 
 
-async def _migrate_to_v2(db) -> None:
+async def _migrate_to_v2(db: Any) -> None:
     """阶段二迁移 v2：新增 paper_reports 表（报告落库，便于查询），幂等。"""
     await db.execute(
         """CREATE TABLE IF NOT EXISTS paper_reports (
@@ -84,7 +85,7 @@ async def _migrate_to_v2(db) -> None:
     )
 
 
-async def _migrate_to_v3(db) -> None:
+async def _migrate_to_v3(db: Any) -> None:
     """阶段三迁移 v3：新增 audit_log 操作审计日志表，幂等。"""
     await db.execute(
         """CREATE TABLE IF NOT EXISTS audit_log (
@@ -114,7 +115,7 @@ MIGRATIONS = {
 }
 
 
-async def run_migrations(db) -> None:
+async def run_migrations(db: Any) -> None:
     """按版本号增量应用迁移，绝不删除数据库。
 
     迁移失败会抛出 RuntimeError 并提示用户手动备份重建（而非自动清库）。
@@ -142,7 +143,7 @@ async def run_migrations(db) -> None:
             ) from e
 
 
-async def init_db():
+async def init_db() -> None:
     """初始化所有数据表 + FTS5 索引 + 版本化迁移"""
     async with aiosqlite.connect(DB_PATH) as db:
         await db.executescript(SCHEMA)
@@ -150,25 +151,28 @@ async def init_db():
         await db.commit()
 
 
-async def get_db():
+from collections.abc import AsyncGenerator
+
+
+async def get_db() -> AsyncGenerator[Any, None]:
     """获取数据库连接，添加 execute_fetchone / execute_fetchall 包装方法"""
     db = await aiosqlite.connect(DB_PATH)
     db.row_factory = aiosqlite.Row
 
     _orig_execute = db.execute
 
-    async def _execute_fetchone(sql, params=None):
+    async def _execute_fetchone(sql: str, params: Any = None) -> dict[str, Any] | None:
         cursor = await _orig_execute(sql, params or [])
         row = await cursor.fetchone()
         return dict(row) if row else None
 
-    async def _execute_fetchall(sql, params=None):
+    async def _execute_fetchall(sql: str, params: Any = None) -> list[dict[str, Any]]:
         cursor = await _orig_execute(sql, params or [])
         rows = await cursor.fetchall()
         return [dict(r) for r in rows]
 
-    db.execute_fetchone = _execute_fetchone
-    db.execute_fetchall = _execute_fetchall
+    db.execute_fetchone = _execute_fetchone  # type: ignore[attr-defined]
+    db.execute_fetchall = _execute_fetchall  # type: ignore[assignment]
 
     try:
         yield db
@@ -708,7 +712,7 @@ KNOWLEDGE_SEED = {
 }
 
 
-async def seed_data():
+async def seed_data() -> None:
     """初始化种子数据：科目、数据源、知识点"""
     async with aiosqlite.connect(DB_PATH) as db:
         for sid, info in {
@@ -728,27 +732,27 @@ async def seed_data():
             )
 
         from config import SOURCES
-        for sid, info in SOURCES.items():
+        for sid, src_info in SOURCES.items():
             await db.execute(
                 "INSERT OR IGNORE INTO sources (id, name, base_url, priority, enabled) VALUES (?,?,?,?,?)",
-                (sid, info["name"], info["base_url"], info["priority"], 1 if info["enabled"] else 0),
+                (sid, src_info["name"], src_info["base_url"], src_info["priority"], 1 if src_info["enabled"] else 0),
             )
 
         for subject_id, kps in KNOWLEDGE_SEED.items():
-            kp_map = {}
+            kp_map: dict[str | None, int] = {}
             for code, name, parent_code, level in kps:
                 parent_id = kp_map.get(parent_code) if parent_code else None
                 cursor = await db.execute(
                     "INSERT OR IGNORE INTO knowledge_points (subject_id, code, name, parent_id, level) VALUES (?,?,?,?,?)",
                     (subject_id, code, name, parent_id, level),
                 )
-                kp_id = cursor.lastrowid
+                kp_id: Any = cursor.lastrowid
                 kp_map[code] = kp_id
 
         await db.commit()
 
 
-async def optimize_fts(db=None):
+async def optimize_fts(db: Any = None) -> None:
     """优化 FTS5 索引：合并段、提升搜索精度（P-6）。
 
     Args:

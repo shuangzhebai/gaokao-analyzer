@@ -1,3 +1,4 @@
+from typing import Any, Callable
 """
 高考模拟卷智能分析系统 v5.1 - Web API 装配
 v5.1: 路由拆分(routes/*)、lifespan 改造(@asynccontextmanager)、异常安全(R-2)、
@@ -10,6 +11,8 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from starlette.responses import Response
 
 from config import VERSION
 from deps import get_auto_scraper, get_audit_service
@@ -51,7 +54,7 @@ app.add_middleware(
 
 # 异常处理器（R-2：全局异常仅返回通用错误，不泄露内部路径/SQL）
 app.add_exception_handler(Exception, global_exception_handler)
-app.add_exception_handler(HTTPException, http_exception_handler)
+app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
 
 
 # ============ 鉴权中间件 ============
@@ -67,7 +70,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
     未设置 API_KEY 时，鉴权跳过（兼容单机使用）。
     """
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
         if API_KEY:
             if request.method in ("POST", "DELETE", "PUT") and request.url.path not in EXEMPT_PATHS:
                 auth = request.headers.get("Authorization", "")
@@ -87,7 +90,7 @@ app.add_middleware(AuthMiddleware)
 # Referrer-Policy 等安全头。不改变既有 CORS / Auth 中间件顺序与逻辑。
 
 @app.middleware("http")
-async def add_security_headers(request: Request, call_next):
+async def add_security_headers(request: Request, call_next: Any) -> Any:
     """为所有 HTTP 响应追加安全响应头。"""
     response = await call_next(request)
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -103,7 +106,7 @@ async def add_security_headers(request: Request, call_next):
 # 放在安全头之后、路由/限速之前，确保所有写操作均被记录。
 
 @app.middleware("http")
-async def audit_log_middleware(request: Request, call_next):
+async def audit_log_middleware(request: Request, call_next: Any) -> Any:
     """审计 POST/PUT/DELETE 请求，不阻塞正常响应。"""
     if request.method in ("POST", "PUT", "DELETE"):
         skip_paths = ['/api/health', '/api/docs', '/api/openapi.json']
@@ -150,14 +153,14 @@ async def audit_log_middleware(request: Request, call_next):
 if _HAS_SLOWAPI:
     limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
     app.add_middleware(SlowAPIMiddleware)
 
 
 # ============ 页面路由 ============
 
 @app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+async def index(request: Request) -> Any:
     # 前端已在 lifespan 启动时读入内存（B-4），避免请求期同步 open() 阻塞事件循环
     return HTMLResponse(request.app.state.index_html)
 
@@ -165,7 +168,7 @@ async def index(request: Request):
 # ============ 健康检查 ============
 
 @app.get("/api/health")
-async def health_check(db=Depends(get_db), auto_scraper=Depends(get_auto_scraper)):
+async def health_check(db: Any = Depends(get_db), auto_scraper: Any = Depends(get_auto_scraper)) -> dict[str, Any]:
     try:
         count = await db.execute_fetchone("SELECT COUNT(*) as cnt FROM papers")
         docs_count = await db.execute_fetchone("SELECT COUNT(*) as cnt FROM official_docs")

@@ -5,7 +5,7 @@
 T01 重构：batch_fix_regions 的裸 SQL 已抽取到 services/paper_service.py。
 """
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from aiosqlite import Connection
 from fastapi import APIRouter, Depends, Query
@@ -25,13 +25,13 @@ router = APIRouter()
 # ============ 地区校验 API ============
 
 @router.get("/api/regions")
-async def get_regions():
+async def get_regions() -> dict[str, Any]:
     """获取地区层级映射"""
     return REGION_HIERARCHY
 
 
 @router.get("/api/regions/validate")
-async def validate_region(province: str = "", city: str = "", title: str = ""):
+async def validate_region(province: str = "", city: str = "", title: str = "") -> dict[str, Any]:
     """校验地区信息"""
     return RegionValidator.validate_region(province=province, city=city, title=title)
 
@@ -41,7 +41,7 @@ async def batch_fix_regions(
     limit: int = 100,
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
-):
+) -> dict[str, Any]:
     """批量纠正试卷地区信息"""
     return await service.batch_fix_regions(db, limit=limit)
 
@@ -49,7 +49,7 @@ async def batch_fix_regions(
 # ============ 真实性审核 API ============
 
 @router.post("/api/audit/paper/{paper_id}")
-async def audit_paper(paper_id: int):
+async def audit_paper(paper_id: int) -> dict[str, Any]:
     result = await AuthVerifier.audit_paper(
         paper_id, deepseek_key=get_deepseek_key()
     )
@@ -57,13 +57,13 @@ async def audit_paper(paper_id: int):
 
 
 @router.post("/api/audit/batch")
-async def batch_audit(limit: int = 100, unverified_only: bool = True):
+async def batch_audit(limit: int = 100, unverified_only: bool = True) -> dict[str, Any]:
     result = await AuthVerifier.batch_audit(limit=limit, unverified_only=unverified_only)
     return result
 
 
 @router.get("/api/audit/summary")
-async def audit_summary():
+async def audit_summary() -> dict[str, Any]:
     return await AuthVerifier.get_audit_summary()
 
 
@@ -75,7 +75,7 @@ async def verify_paper_authenticity(
     subject_id: str = Query(...),
     year: int = Query(...),
     province: str = "",
-):
+) -> dict[str, Any]:
     result = await CrossVerifier.verify_paper(
         title=title, subject_id=subject_id, year=year, province=province,
         deepseek_key=get_deepseek_key(),
@@ -86,5 +86,5 @@ async def verify_paper_authenticity(
 # ============ 校准数据 API ============
 
 @router.get("/api/calibration")
-async def get_calibration_data():
+async def get_calibration_data() -> dict[str, Any]:
     return CALIBRATION_DATA

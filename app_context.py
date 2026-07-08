@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import os
 import sys
+from typing import Any
 
 from config import VERSION, DATA_DIR, DB_PATH, get_deepseek_key
 
@@ -28,7 +29,7 @@ class AppContext:
     engine_count: int
 
 
-def build_app_context(app) -> AppContext:
+def build_app_context(app: Any) -> AppContext:
     """根据 app.state 中已注入的引擎单例构建 AppContext 快照。
 
     引擎属性白名单与 lifespan.create_lifespan 中 asyncio.gather 注入的 14 个引擎一致；

@@ -3,7 +3,7 @@
 与 verification_audit（试卷真实性审核）完全独立。
 """
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from repositories.audit_repo import AuditRepository
 
@@ -16,14 +16,14 @@ class AuditService:
 
     async def log(
         self,
-        db,
+        db: Any,
         user: str,
         action: str,
         resource_type: str,
         resource_id: Optional[str] = None,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
-        detail: Optional[dict] = None,
+        detail: Optional[dict[str, Any]] = None,
     ) -> None:
         """写入一条审计日志。
 
@@ -48,7 +48,7 @@ class AuditService:
         }
         await self.audit_repo.create(db, entry)
 
-    async def list_recent(self, db, limit: int = 50) -> list[dict]:
+    async def list_recent(self, db: Any, limit: int = 50) -> Any:
         """获取最近的审计日志记录。
 
         Args:
@@ -60,7 +60,7 @@ class AuditService:
         """
         return await self.audit_repo.list_recent(db, limit)
 
-    async def list_by_user(self, db, user: str, limit: int = 50) -> list[dict]:
+    async def list_by_user(self, db: Any, user: str, limit: int = 50) -> Any:
         """获取指定用户的审计日志记录。
 
         Args:

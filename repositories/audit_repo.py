@@ -4,10 +4,13 @@
 """
 
 
+from typing import Any
+
+
 class AuditRepository:
     """操作审计日志数据访问对象"""
 
-    async def create(self, db, entry: dict) -> int:
+    async def create(self, db: Any, entry: dict[str, Any]) -> Any:
         """插入一条审计日志记录，返回自增 id。
 
         Args:
@@ -34,7 +37,7 @@ class AuditRepository:
         )
         return cursor.lastrowid
 
-    async def list_recent(self, db, limit: int = 50) -> list[dict]:
+    async def list_recent(self, db: Any, limit: int = 50) -> Any:
         """获取最近的审计日志记录，按时间倒序排列。
 
         Args:
@@ -49,7 +52,7 @@ class AuditRepository:
             (limit,),
         )
 
-    async def list_by_user(self, db, user: str, limit: int = 50) -> list[dict]:
+    async def list_by_user(self, db: Any, user: str, limit: int = 50) -> Any:
         """获取指定用户的审计日志记录，按时间倒序排列。
 
         Args:

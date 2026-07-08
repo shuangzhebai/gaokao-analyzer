@@ -5,7 +5,7 @@
 T01 重构：所有裸 SQL 已抽取到 services/scrape_service.py。
 """
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from aiosqlite import Connection
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -21,9 +21,9 @@ router = APIRouter()
 @router.get("/api/scrape/status")
 async def scrape_status(
     db: Connection = Depends(get_db),
-    auto_scraper=Depends(get_auto_scraper),
+    auto_scraper: Any = Depends(get_auto_scraper),
     service: ScrapeService = Depends(get_scrape_service),
-):
+) -> Any:
     return await service.get_scrape_status(db, auto_scraper)
 
 
@@ -33,10 +33,10 @@ async def collect_papers(
     subjects: Optional[str] = None,
     keyword: Optional[str] = None,
     db: Connection = Depends(get_db),
-    scraper_manager=Depends(get_scraper_manager),
-    dedup_engine=Depends(get_dedup_engine),
+    scraper_manager: Any = Depends(get_scraper_manager),
+    dedup_engine: Any = Depends(get_dedup_engine),
     service: ScrapeService = Depends(get_scrape_service),
-):
+) -> Any:
     return await service.collect_papers(
         db, scraper_manager, dedup_engine,
         year=year, subjects=subjects, keyword=keyword,
@@ -44,7 +44,7 @@ async def collect_papers(
 
 
 @router.get("/api/auto-scraper/status")
-async def auto_scraper_status(auto_scraper=Depends(get_auto_scraper)):
+async def auto_scraper_status(auto_scraper: Any = Depends(get_auto_scraper)) -> Any:
     if not auto_scraper:
         return {"running": False, "error": "Auto-scraper not initialized"}
     return auto_scraper.get_status()
@@ -53,8 +53,8 @@ async def auto_scraper_status(auto_scraper=Depends(get_auto_scraper)):
 @router.post("/api/auto-scraper/trigger")
 async def trigger_auto_scrape(
     background_tasks: BackgroundTasks,
-    auto_scraper=Depends(get_auto_scraper),
-):
+    auto_scraper: Any = Depends(get_auto_scraper),
+) -> Any:
     """手动触发一次自动采集（R-6：使用 BackgroundTasks，异常有兜底日志）"""
     if not auto_scraper:
         raise HTTPException(500, "Auto-scraper not initialized")
@@ -62,7 +62,7 @@ async def trigger_auto_scrape(
     return {"triggered": True}
 
 
-async def _safe_run_once(auto_scraper) -> None:
+async def _safe_run_once(auto_scraper: Any) -> None:
     """包裹自动采集单次运行，捕获并记录异常，避免任务静默失败。"""
     try:
         await auto_scraper._run_once()

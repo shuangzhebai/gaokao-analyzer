@@ -8,7 +8,7 @@ T01 重构：所有裸 SQL 已抽取到 repositories/，业务编排到 services
 """
 import json
 import logging
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from aiosqlite import Connection
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -30,7 +30,7 @@ async def analyze_paper_endpoint(
     db: Connection = Depends(get_db),
     analyzer: PaperAnalyzer = Depends(get_paper_analyzer),
     service: AnalysisService = Depends(get_analysis_service),
-):
+) -> Any:
     """分析单份试卷，返回结构化报告并落库。"""
     return await service.analyze_paper(db, paper_id, analyzer)
 
@@ -42,7 +42,7 @@ async def analyze_papers_batch_endpoint(
     db: Connection = Depends(get_db),
     analyzer: PaperAnalyzer = Depends(get_paper_analyzer),
     service: AnalysisService = Depends(get_analysis_service),
-):
+) -> Any:
     """批量并行分析多份试卷（接收 paper id 列表），返回与输入顺序一致的报告数组。"""
     if not paper_ids:
         raise HTTPException(400, "paper_ids 不能为空")
@@ -84,6 +84,6 @@ async def get_paper_report(
     paper_id: int,
     db: Connection = Depends(get_db),
     service: AnalysisService = Depends(get_analysis_service),
-):
+) -> Any | None:
     """获取某试卷最新一次分析报告。"""
     return await service.get_paper_report(db, paper_id)

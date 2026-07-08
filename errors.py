@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 logger = logging.getLogger("gaokao")
 
 
-async def global_exception_handler(request: Request, exc: Exception):
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """未捕获异常：记录详细日志到服务端，仅向客户端返回通用错误。"""
     logger.error(
         f"Unhandled error on {request.method} {request.url}: {exc}\n{traceback.format_exc()}"
@@ -24,7 +24,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-async def http_exception_handler(request: Request, exc: HTTPException):
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     """HTTP 异常：返回应用层 detail（不含内部堆栈/SQL）。"""
     return JSONResponse(
         status_code=exc.status_code,

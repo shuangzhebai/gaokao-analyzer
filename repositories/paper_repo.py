@@ -1,14 +1,14 @@
 """
 试卷 DAO：封装 papers 表的所有 SQL 操作（aiosqlite，不引入 ORM）。
 """
-from typing import Optional
+from typing import Any, Optional
 
 
 class PaperRepository:
     """试卷数据访问对象"""
 
     async def list_papers(
-        self, db,
+        self, db: Any,
         subject: Optional[str] = None,
         paper_type: Optional[str] = None,
         year: Optional[int] = None,
@@ -16,10 +16,10 @@ class PaperRepository:
         analysis_status: Optional[str] = None,
         page: int = 1,
         size: int = 20,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """分页查询试卷列表，排除 duplicate 状态的试卷。"""
-        conditions = []
-        params = []
+        conditions: list[str] = []
+        params: list[Any] = []
         if subject:
             conditions.append("subject_id = ?")
             params.append(subject)
@@ -54,15 +54,15 @@ class PaperRepository:
             "data": rows,
         }
 
-    async def get_by_id(self, db, paper_id: int) -> Optional[dict]:
+    async def get_by_id(self, db: Any, paper_id: int) -> Any:
         """根据主键获取试卷"""
         return await db.execute_fetchone("SELECT * FROM papers WHERE id = ?", (paper_id,))
 
-    async def get_source_by_id(self, db, source_id: str) -> Optional[dict]:
+    async def get_source_by_id(self, db: Any, source_id: str) -> Any:
         """获取数据源信息"""
         return await db.execute_fetchone("SELECT * FROM sources WHERE id = ?", (source_id,))
 
-    async def create(self, db, data: dict) -> int:
+    async def create(self, db: Any, data: dict[str, Any]) -> Any:
         """插入一条试卷记录，返回自增 id。"""
         cursor = await db.execute(
             """INSERT INTO papers
@@ -91,7 +91,7 @@ class PaperRepository:
         )
         return cursor.lastrowid
 
-    async def delete(self, db, paper_id: int) -> None:
+    async def delete(self, db: Any, paper_id: int) -> None:
         """删除试卷及其关联数据（通过 ON DELETE CASCADE 删子表）。"""
         await db.execute("DELETE FROM questions WHERE paper_id = ?", (paper_id,))
         await db.execute("DELETE FROM analysis_results WHERE paper_id = ?", (paper_id,))
@@ -102,56 +102,56 @@ class PaperRepository:
         await db.execute("DELETE FROM verification_audit WHERE paper_id = ?", (paper_id,))
         await db.execute("DELETE FROM papers WHERE id = ?", (paper_id,))
 
-    async def update_analysis_status(self, db, paper_id: int, status: str) -> None:
+    async def update_analysis_status(self, db: Any, paper_id: int, status: str) -> None:
         """更新分析状态"""
         await db.execute(
             "UPDATE papers SET analysis_status = ? WHERE id = ?",
             (status, paper_id),
         )
 
-    async def update_difficulty(self, db, paper_id: int, difficulty: float) -> None:
+    async def update_difficulty(self, db: Any, paper_id: int, difficulty: float) -> None:
         """更新试卷难度"""
         await db.execute(
             "UPDATE papers SET difficulty = ? WHERE id = ?",
             (difficulty, paper_id),
         )
 
-    async def update_curriculum(self, db, paper_id: int, score: float, json_data: str) -> None:
+    async def update_curriculum(self, db: Any, paper_id: int, score: float, json_data: str) -> None:
         """更新课标契合度分析结果"""
         await db.execute(
             "UPDATE papers SET curriculum_score=?, curriculum_json=? WHERE id=?",
             (score, json_data, paper_id),
         )
 
-    async def update_quality(self, db, paper_id: int, score: float, json_data: str) -> None:
+    async def update_quality(self, db: Any, paper_id: int, score: float, json_data: str) -> None:
         """更新质量评估结果"""
         await db.execute(
             "UPDATE papers SET quality_score=?, quality_json=? WHERE id=?",
             (score, json_data, paper_id),
         )
 
-    async def update_simulation_json(self, db, paper_id: int, json_data: str) -> None:
+    async def update_simulation_json(self, db: Any, paper_id: int, json_data: str) -> None:
         """更新模拟结果 JSON"""
         await db.execute(
             "UPDATE papers SET simulation_json=? WHERE id=?",
             (json_data, paper_id),
         )
 
-    async def update_verified(self, db, paper_id: int, verified: int) -> None:
+    async def update_verified(self, db: Any, paper_id: int, verified: int) -> None:
         """更新验证状态"""
         await db.execute(
             "UPDATE papers SET verified = ? WHERE id = ?",
             (verified, paper_id),
         )
 
-    async def update_province(self, db, paper_id: int, province: str) -> None:
+    async def update_province(self, db: Any, paper_id: int, province: str) -> None:
         """更新省份信息"""
         await db.execute(
             "UPDATE papers SET province = ? WHERE id = ?",
             (province, paper_id),
         )
 
-    async def get_dashboard_stats(self, db) -> dict:
+    async def get_dashboard_stats(self, db: Any) -> dict[str, Any]:
         """聚合仪表盘统计数据"""
         total_papers = await db.execute_fetchone("SELECT COUNT(*) as cnt FROM papers")
         analyzed = await db.execute_fetchone(
@@ -208,7 +208,7 @@ class PaperRepository:
             "by_type": {r["paper_type"]: r["cnt"] for r in by_type},
         }
 
-    async def get_filter_options(self, db) -> dict:
+    async def get_filter_options(self, db: Any) -> dict[str, Any]:
         """获取筛选元数据（省份、考试标签、学校、年份）"""
         provinces = await db.execute_fetchall(
             "SELECT DISTINCT province FROM papers WHERE province IS NOT NULL AND province != '' ORDER BY province"
@@ -229,7 +229,7 @@ class PaperRepository:
             "years": [r["year"] for r in years if r["year"]],
         }
 
-    async def get_latest(self, db, limit: int = 10) -> list[dict]:
+    async def get_latest(self, db: Any, limit: int = 10) -> Any:
         """获取最新试卷列表"""
         return await db.execute_fetchall(
             """SELECT id, title, subject_id, paper_type, year, province,
@@ -241,7 +241,7 @@ class PaperRepository:
         )
 
     async def list_pending_irt(
-        self, db,
+        self, db: Any,
         subject: Optional[str] = None,
         paper_type: Optional[str] = None,
         limit: int = 50,
@@ -264,7 +264,7 @@ class PaperRepository:
         return [r["id"] for r in rows]
 
     async def list_by_status(
-        self, db,
+        self, db: Any,
         status: str,
         subject: Optional[str] = None,
         limit: int = 10,
@@ -283,21 +283,21 @@ class PaperRepository:
         )
         return [r["id"] for r in rows]
 
-    async def get_subject_id(self, db, paper_id: int) -> Optional[str]:
+    async def get_subject_id(self, db: Any, paper_id: int) -> Optional[str]:
         """获取试卷的科目 ID"""
         row = await db.execute_fetchone(
             "SELECT subject_id FROM papers WHERE id = ?", (paper_id,)
         )
         return row["subject_id"] if row else None
 
-    async def exists_by_source_url(self, db, source_url: str) -> bool:
+    async def exists_by_source_url(self, db: Any, source_url: str) -> bool:
         """检查 source_url 是否已存在"""
         row = await db.execute_fetchone(
             "SELECT id FROM papers WHERE source_url = ?", (source_url,)
         )
         return row is not None
 
-    async def get_papers_for_batch_fix(self, db, limit: int = 100) -> list[dict]:
+    async def get_papers_for_batch_fix(self, db: Any, limit: int = 100) -> Any:
         """获取待批量纠正地区的试卷"""
         return await db.execute_fetchall(
             "SELECT id, title, province, school FROM papers LIMIT ?", (limit,)

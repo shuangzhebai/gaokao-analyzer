@@ -2,19 +2,19 @@
 分析结果 DAO：封装 analysis_results 和 paper_reports 表的所有 SQL 操作。
 """
 import json
-from typing import Optional
+from typing import Any, Optional
 
 
 class AnalysisRepository:
     """分析结果数据访问对象"""
 
-    async def get_by_paper(self, db, paper_id: int) -> list[dict]:
+    async def get_by_paper(self, db: Any, paper_id: int) -> Any:
         """获取某试卷的所有分析结果"""
         return await db.execute_fetchall(
             "SELECT * FROM analysis_results WHERE paper_id = ?", (paper_id,)
         )
 
-    async def create(self, db, data: dict) -> int:
+    async def create(self, db: Any, data: dict[str, Any]) -> Any:
         """插入一条分析结果记录"""
         cursor = await db.execute(
             """INSERT INTO analysis_results
@@ -42,7 +42,7 @@ class AnalysisRepository:
         )
         return cursor.lastrowid
 
-    async def save_report(self, db, paper_id: int, report_json: str, score: Optional[float], grade: Optional[str]) -> None:
+    async def save_report(self, db: Any, paper_id: int, report_json: str, score: Optional[float], grade: Optional[str]) -> None:
         """保存分析报告到 paper_reports 表"""
         await db.execute(
             """INSERT INTO paper_reports (paper_id, report_json, composite_score, grade)
@@ -50,7 +50,7 @@ class AnalysisRepository:
             (paper_id, report_json, score, grade),
         )
 
-    async def get_report(self, db, paper_id: int) -> Optional[dict]:
+    async def get_report(self, db: Any, paper_id: int) -> Any:
         """获取某试卷最新一份分析报告"""
         return await db.execute_fetchone(
             "SELECT * FROM paper_reports WHERE paper_id = ? ORDER BY id DESC LIMIT 1",

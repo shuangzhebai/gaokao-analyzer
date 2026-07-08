@@ -8,5 +8,57 @@ target-version = "py313"
 
 [tool.mypy]
 python_version = "3.13"
-ignore_missing_imports = true
+strict = true
+warn_unused_ignores = true
 exclude = ["tests"]
+
+# 第三方库没有类型 stubs，忽略其导入
+[[tool.mypy.overrides]]
+module = [
+    "aiosqlite",
+    "slowapi.*",
+    "bs4",
+    "lxml",
+    "PIL",
+    "httpx",
+    "pdfplumber",
+    "docx",
+    "passlib.*",
+    "jose.*",
+    "sklearn.*",
+    "matplotlib.*",
+    "jieba",
+    "wordcloud",
+    "pypinyin",
+    "openpyxl",
+    "tqdm",
+    "snownlp",
+    "textrank4zh",
+    "zhipuai",
+    "dashscope",
+    "openai",
+    "selenium",
+    "webdriver_manager",
+    "tenacity",
+    "aiofiles",
+    "cachetools",
+    "PIL.*",
+    "cssutils",
+    "dateutil.*",
+    "py_mini_racer",
+    "xxhash",
+    "cairosvg",
+    "svgutils",
+    "rapidfuzz",
+    "markdown",
+    "yaml",
+]
+ignore_missing_imports = true
+
+# numpy/scipy stubs are extremely strict about overloads
+[[tool.mypy.overrides]]
+module = [
+    "numpy.*",
+    "scipy.*",
+]
+ignore_missing_imports = true

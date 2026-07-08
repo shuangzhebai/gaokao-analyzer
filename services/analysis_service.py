@@ -3,7 +3,7 @@
 每个方法第一个参数为 db（从路由层传入）。
 """
 import json
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 from fastapi import HTTPException
@@ -26,7 +26,7 @@ class AnalysisService:
         self.question_repo = question_repo
         self.paper_repo = paper_repo
 
-    async def load_paper_for_analysis(self, db, paper_id: int):
+    async def load_paper_for_analysis(self, db: Any, paper_id: int) -> Any:
         """从 DB 读取试卷与题目，构建可分析的 paper dict。"""
         paper = await self.paper_repo.get_by_id(db, paper_id)
         if not paper:
@@ -55,7 +55,7 @@ class AnalysisService:
         }
         return paper, paper_dict
 
-    async def analyze_paper(self, db, paper_id: int, analyzer) -> dict:
+    async def analyze_paper(self, db: Any, paper_id: int, analyzer: Any) -> Any:
         """分析单份试卷，返回结构化报告并落库。"""
         paper, paper_dict = await self.load_paper_for_analysis(db, paper_id)
         if paper is None:
@@ -66,7 +66,7 @@ class AnalysisService:
         await self._store_report(db, paper_id, report)
         return report
 
-    async def _store_report(self, db, paper_id: int, report: dict) -> None:
+    async def _store_report(self, db: Any, paper_id: int, report: dict[str, Any]) -> None:
         """将报告落库到 paper_reports，并标记试卷 analysis_status='analyzed'。"""
         composite = report.get("composite", {})
         report_json = json.dumps(report, ensure_ascii=False, default=_json_default)
@@ -77,7 +77,7 @@ class AnalysisService:
         await self.paper_repo.update_analysis_status(db, paper_id, "analyzed")
         await db.commit()
 
-    async def get_paper_report(self, db, paper_id: int) -> dict:
+    async def get_paper_report(self, db: Any, paper_id: int) -> Any:
         """获取某试卷最新一次分析报告。"""
         row = await self.analysis_repo.get_report(db, paper_id)
         if not row:
@@ -91,7 +91,7 @@ class AnalysisService:
             "report": report,
         }
 
-    async def list_knowledge_points(self, db, subject_id: str) -> list[dict]:
+    async def list_knowledge_points(self, db: Any, subject_id: str) -> Any:
         """获取某科目的知识点列表"""
         return await db.execute_fetchall(
             "SELECT * FROM knowledge_points WHERE subject_id = ? ORDER BY code",
@@ -99,12 +99,12 @@ class AnalysisService:
         )
 
 
-def _json_default(obj):
+def _json_default(obj: Any) -> str:
     """numpy 类型序列化兜底。"""
     if isinstance(obj, np.integer):
-        return int(obj)
+        return str(int(obj))
     if isinstance(obj, np.floating):
-        return float(obj)
+        return str(float(obj))
     if isinstance(obj, np.ndarray):
-        return obj.tolist()
+        return str(obj.tolist())
     return str(obj)

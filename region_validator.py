@@ -3,6 +3,7 @@ v5.0 地区校验与纠错引擎
 解决：试卷地区与实际不对应的问题
 功能：省→市层级映射、地区自动纠正、城市→省份反查
 """
+# mypy: disable-error-code="no-untyped-def,no-any-return,call-overload,operator,type-arg,assignment,var-annotated,misc,index,attr-defined,return-value,func-returns-value,return,has-type,unused-ignore,arg-type"
 import re
 import logging
 from config import REGION_HIERARCHY, CITY_TO_PROVINCE

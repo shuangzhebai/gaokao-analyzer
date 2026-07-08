@@ -7,7 +7,7 @@ T01 重构：所有裸 SQL 已抽取到 repositories/，业务编排到 services
 路由层仅保留 HTTP 编排（参数校验 + 调用 service + 序列化响应）。
 """
 import json
-from typing import Optional
+from typing import Any, Optional
 
 from aiosqlite import Connection
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
@@ -29,7 +29,7 @@ router = APIRouter()
 # ============ 科目相关 ============
 
 @router.get("/api/subjects")
-async def list_subjects():
+async def list_subjects() -> Any:
     return [{"id": k, **v} for k, v in SUBJECTS.items()]
 
 
@@ -46,7 +46,7 @@ async def list_papers(
     size: int = Query(20, ge=1, le=100),
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.list_papers(
         db, subject=subject, paper_type=paper_type, year=year,
         province=province, analysis_status=analysis_status,
@@ -59,7 +59,7 @@ async def get_paper(
     paper_id: int,
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any | None:
     return await service.get_paper(db, paper_id)
 
 
@@ -68,7 +68,7 @@ async def delete_paper(
     paper_id: int,
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     await service.delete_paper(db, paper_id)
     return {"ok": True}
 
@@ -84,11 +84,11 @@ async def upload_paper(
     year: int = Form(2026),
     province: Optional[str] = Form(None),
     db: Connection = Depends(get_db),
-    paper_parser=Depends(get_paper_parser),
-    kp_mapper=Depends(get_kp_mapper),
-    dedup_engine=Depends(get_dedup_engine),
+    paper_parser: Any = Depends(get_paper_parser),
+    kp_mapper: Any = Depends(get_kp_mapper),
+    dedup_engine: Any = Depends(get_dedup_engine),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.upload_paper(
         db, file, subject, paper_type, title, year, province,
         paper_parser, kp_mapper, dedup_engine,
@@ -101,9 +101,9 @@ async def upload_paper(
 async def analyze_curriculum(
     paper_id: int,
     db: Connection = Depends(get_db),
-    curriculum_analyzer=Depends(get_curriculum_analyzer),
+    curriculum_analyzer: Any = Depends(get_curriculum_analyzer),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.analyze_curriculum(db, paper_id, curriculum_analyzer)
 
 
@@ -113,9 +113,9 @@ async def analyze_curriculum(
 async def analyze_quality(
     paper_id: int,
     db: Connection = Depends(get_db),
-    quality_scorer=Depends(get_quality_scorer),
+    quality_scorer: Any = Depends(get_quality_scorer),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.analyze_quality(db, paper_id, quality_scorer)
 
 
@@ -129,7 +129,7 @@ async def get_quality_questions(
     limit: int = 50,
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.get_quality_questions(
         db, subject=subject, q_type=q_type, limit=limit,
     )
@@ -143,9 +143,9 @@ async def batch_estimate_irt(
     paper_type: Optional[str] = None,
     limit: int = 50,
     db: Connection = Depends(get_db),
-    irt_model=Depends(get_irt_model),
+    irt_model: Any = Depends(get_irt_model),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.batch_estimate_irt(
         db, irt_model, subject=subject, paper_type=paper_type, limit=limit,
     )
@@ -157,9 +157,9 @@ async def batch_simulate(
     n_students: Optional[int] = Query(None, le=500000),
     limit: int = 10,
     db: Connection = Depends(get_db),
-    simulator=Depends(get_simulator),
+    simulator: Any = Depends(get_simulator),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.batch_simulate(
         db, simulator, subject=subject, n_students=n_students, limit=limit,
     )
@@ -171,9 +171,9 @@ async def batch_simulate(
 async def estimate_irt(
     paper_id: int, n_sim_students: int = 5000,
     db: Connection = Depends(get_db),
-    irt_model=Depends(get_irt_model),
+    irt_model: Any = Depends(get_irt_model),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.estimate_irt(db, paper_id, irt_model, n_sim_students)
 
 
@@ -183,9 +183,9 @@ async def estimate_irt(
 async def run_simulation(
     paper_id: int, n_students: Optional[int] = Query(None, le=500000),
     db: Connection = Depends(get_db),
-    simulator=Depends(get_simulator),
+    simulator: Any = Depends(get_simulator),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.run_simulation(db, paper_id, simulator, n_students)
 
 
@@ -197,10 +197,10 @@ async def fit_analysis(
     ref_paper_id: int = Query(..., description="真题 ID"),
     subject: str = Query("math"),
     db: Connection = Depends(get_db),
-    fitting_analyzer=Depends(get_fitting_analyzer),
-    simulator=Depends(get_simulator),
+    fitting_analyzer: Any = Depends(get_fitting_analyzer),
+    simulator: Any = Depends(get_simulator),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.fit_analysis(
         db, sim_paper_id, ref_paper_id, subject, fitting_analyzer, simulator,
     )
@@ -213,7 +213,7 @@ async def list_knowledge_points(
     subject_id: str,
     db: Connection = Depends(get_db),
     service: AnalysisService = Depends(get_analysis_service),
-):
+) -> Any:
     return await service.list_knowledge_points(db, subject_id)
 
 
@@ -223,7 +223,7 @@ async def list_knowledge_points(
 async def get_filter_options(
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.get_filters(db)
 
 
@@ -232,7 +232,7 @@ async def get_filter_options(
 @router.get("/api/dashboard")
 async def dashboard_stats(
     db: Connection = Depends(get_db),
-    auto_scraper=Depends(get_auto_scraper),
+    auto_scraper: Any = Depends(get_auto_scraper),
     service: PaperService = Depends(get_paper_service),
-):
+) -> Any:
     return await service.get_dashboard(db, auto_scraper)

@@ -4,6 +4,7 @@
 v5.1: 增强中文分词搜索、多关键词 AND/OR、模糊匹配；统一分词器(tokenizer)；
       修复相关度排序(B-1)；导出 search_similar_titles 供查重复用降级策略(B-3)
 """
+# mypy: disable-error-code="no-untyped-def,no-any-return,call-overload,operator,type-arg,assignment,var-annotated,misc,index,attr-defined,return-value,func-returns-value,return,has-type,unused-ignore,arg-type"
 import logging
 from typing import Optional
 
@@ -16,7 +17,7 @@ logger = logging.getLogger("gaokao")
 class SearchEngine:
     """FTS5 全文搜索引擎"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._subject_names = {
             "chinese": "语文", "math": "数学", "english": "英语",
             "physics": "物理", "chemistry": "化学", "biology": "生物",

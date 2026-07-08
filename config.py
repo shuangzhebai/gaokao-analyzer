@@ -572,27 +572,30 @@ QUESTION_TYPE_PRESET = {
 }
 
 
-def get_scraper_network_config() -> dict:
+from typing import Any
+
+
+def get_scraper_network_config() -> dict[str, Any]:
     """惰性读取爬虫网络/反爬配置（运行时可调参，无需重启）。"""
     return SCRAPER_NETWORK
 
 
-def get_data_sources_config() -> list:
+def get_data_sources_config() -> list[dict[str, Any]]:
     """惰性读取数据源列表配置。"""
     return DATA_SOURCES
 
 
-def get_analysis_config() -> dict:
+def get_analysis_config() -> dict[str, Any]:
     """惰性读取试卷分析配置。"""
     return ANALYSIS_CONFIG
 
 
-def get_analysis_weights() -> dict:
+def get_analysis_weights() -> dict[str, float]:
     """惰性读取 6 维度综合权重。"""
     return ANALYSIS_WEIGHTS
 
 
-def get_question_type_preset(subject_id: str) -> dict:
+def get_question_type_preset(subject_id: str) -> dict[str, float]:
     """惰性读取某科题型预设分值占比；缺省回退到 math。"""
     return QUESTION_TYPE_PRESET.get(subject_id, QUESTION_TYPE_PRESET["math"])
 

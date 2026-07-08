@@ -5,7 +5,7 @@
 import hashlib
 import json
 import os
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 from fastapi import HTTPException
@@ -30,8 +30,8 @@ class PaperService:
         self.question_repo = question_repo
         self.analysis_repo = analysis_repo
 
-    async def list_papers(self, db, subject=None, paper_type=None, year=None,
-                          province=None, analysis_status=None, page=1, size=20) -> dict:
+    async def list_papers(self, db: Any, subject: Optional[str] = None, paper_type: Optional[str] = None, year: Optional[int] = None,
+                          province: Optional[str] = None, analysis_status: Optional[str] = None, page: int = 1, size: int = 20) -> dict[str, Any]:
         """分页查询试卷列表"""
         return await self.paper_repo.list_papers(
             db, subject=subject, paper_type=paper_type, year=year,
@@ -39,7 +39,7 @@ class PaperService:
             page=page, size=size,
         )
 
-    async def get_paper(self, db, paper_id: int) -> dict:
+    async def get_paper(self, db: Any, paper_id: int) -> dict[str, Any]:
         """获取试卷详情（含题目、分析结果、来源、地区校验）"""
         paper = await self.paper_repo.get_by_id(db, paper_id)
         if not paper:
@@ -67,7 +67,7 @@ class PaperService:
             "region_check": region_check,
         }
 
-    async def delete_paper(self, db, paper_id: int) -> None:
+    async def delete_paper(self, db: Any, paper_id: int) -> None:
         """删除试卷"""
         paper = await self.paper_repo.get_by_id(db, paper_id)
         if not paper:
@@ -76,9 +76,9 @@ class PaperService:
         await db.commit()
 
     async def upload_paper(
-        self, db, file, subject, paper_type, title, year, province,
-        paper_parser, kp_mapper, dedup_engine,
-    ) -> dict:
+        self, db: Any, file: Any, subject: str, paper_type: str, title: Optional[str], year: int, province: Optional[str],
+        paper_parser: Any, kp_mapper: Any, dedup_engine: Any,
+    ) -> dict[str, Any]:
         """上传并解析试卷"""
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
         safe_filename = os.path.basename(file.filename or "")
@@ -177,7 +177,7 @@ class PaperService:
             "similar_papers": dedup_result.get("similar_papers", []),
         }
 
-    async def analyze_curriculum(self, db, paper_id: int, curriculum_analyzer) -> dict:
+    async def analyze_curriculum(self, db: Any, paper_id: int, curriculum_analyzer: Any) -> Any:
         """课标契合度分析"""
         paper = await self.paper_repo.get_by_id(db, paper_id)
         if not paper:
@@ -229,7 +229,7 @@ class PaperService:
         await db.commit()
         return result
 
-    async def analyze_quality(self, db, paper_id: int, quality_scorer) -> dict:
+    async def analyze_quality(self, db: Any, paper_id: int, quality_scorer: Any) -> Any:
         """题目质量评估"""
         paper = await self.paper_repo.get_by_id(db, paper_id)
         if not paper:
@@ -272,14 +272,14 @@ class PaperService:
         await db.commit()
         return result
 
-    async def get_quality_questions(self, db, subject=None, q_type=None, limit=50) -> dict:
+    async def get_quality_questions(self, db: Any, subject: Optional[str] = None, q_type: Optional[str] = None, limit: int = 50) -> dict[str, Any]:
         """优质题推荐"""
         rows = await self.question_repo.get_quality_questions(
             db, subject=subject, q_type=q_type, limit=limit,
         )
         return {"total": len(rows), "data": rows}
 
-    async def estimate_irt(self, db, paper_id: int, irt_model, n_sim_students: int = 5000) -> dict:
+    async def estimate_irt(self, db: Any, paper_id: int, irt_model: Any, n_sim_students: int = 5000) -> dict[str, Any]:
         """单卷 IRT 参数估计"""
         questions = await self.question_repo.list_by_paper(db, paper_id)
         if not questions:
@@ -322,7 +322,7 @@ class PaperService:
             "params": params_list,
         }
 
-    async def batch_estimate_irt(self, db, irt_model, subject=None, paper_type=None, limit=50) -> dict:
+    async def batch_estimate_irt(self, db: Any, irt_model: Any, subject: Optional[str] = None, paper_type: Optional[str] = None, limit: int = 50) -> dict[str, Any]:
         """批量 IRT 参数估计"""
         paper_ids = await self.paper_repo.list_pending_irt(
             db, subject=subject, paper_type=paper_type, limit=limit,
@@ -370,7 +370,7 @@ class PaperService:
         await db.commit()
         return {"estimated_count": len(estimated), "paper_ids": estimated}
 
-    async def run_simulation(self, db, paper_id: int, simulator, n_students=None) -> dict:
+    async def run_simulation(self, db: Any, paper_id: int, simulator: Any, n_students: Optional[int] = None) -> Any:
         """单卷蒙特卡洛模拟"""
         n = n_students or MC_CONFIG["n_students"]
 
@@ -408,7 +408,7 @@ class PaperService:
 
         return result
 
-    async def batch_simulate(self, db, simulator, subject=None, n_students=None, limit=10) -> dict:
+    async def batch_simulate(self, db: Any, simulator: Any, subject: Optional[str] = None, n_students: Optional[int] = None, limit: int = 10) -> dict[str, Any]:
         """批量蒙特卡洛模拟"""
         n = n_students or MC_CONFIG["n_students"]
         paper_ids = await self.paper_repo.list_by_status(
@@ -450,9 +450,9 @@ class PaperService:
         return {"simulated_count": len(simulated), "n_students": n, "paper_ids": simulated}
 
     async def fit_analysis(
-        self, db, sim_paper_id: int, ref_paper_id: int, subject: str,
-        fitting_analyzer, simulator,
-    ) -> dict:
+        self, db: Any, sim_paper_id: int, ref_paper_id: int, subject: str,
+        fitting_analyzer: Any, simulator: Any,
+    ) -> Any:
         """拟合分析（模拟卷 vs 真题）"""
         sim_qs = await self.question_repo.list_by_paper(db, sim_paper_id)
         ref_qs = await self.question_repo.list_by_paper(db, ref_paper_id)
@@ -506,7 +506,7 @@ class PaperService:
 
         return result
 
-    async def get_filters(self, db) -> dict:
+    async def get_filters(self, db: Any) -> dict[str, Any]:
         """获取筛选元数据"""
         filter_data = await self.paper_repo.get_filter_options(db)
         from config import PAPER_TYPES, SOURCE_PRIORITY_MAP, SUBJECTS, REGION_HIERARCHY
@@ -516,7 +516,7 @@ class PaperService:
         filter_data["regions"] = REGION_HIERARCHY
         return filter_data
 
-    async def get_dashboard(self, db, auto_scraper) -> dict:
+    async def get_dashboard(self, db: Any, auto_scraper: Any) -> dict[str, Any]:
         """仪表盘统计"""
         stats = await self.paper_repo.get_dashboard_stats(db)
         latest = await self.paper_repo.get_latest(db)
@@ -529,7 +529,7 @@ class PaperService:
         stats["auto_scraper_status"] = auto_scraper.get_status() if auto_scraper else None
         return stats
 
-    async def batch_fix_regions(self, db, limit: int = 100) -> dict:
+    async def batch_fix_regions(self, db: Any, limit: int = 100) -> dict[str, Any]:
         """批量纠正试卷地区信息"""
         papers = await self.paper_repo.get_papers_for_batch_fix(db, limit)
         results = RegionValidator.batch_validate(papers)

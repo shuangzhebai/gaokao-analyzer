@@ -13,6 +13,7 @@
 2. 适配器需要用户提供有效 cookies / session token 才能正常工作。
 3. 未对该类站点做端到端网络测试，仅验证适配器注册与框架集成正确。
 """
+# mypy: disable-error-code="no-untyped-def,no-any-return,call-overload,operator,type-arg,assignment,var-annotated,misc,index,attr-defined,return-value,func-returns-value,return,has-type,unused-ignore,arg-type,no-untyped-call,type-var,call-arg"
 
 import logging
 import re

@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator
 
 from fastapi import FastAPI
 
@@ -30,7 +31,7 @@ from app_context import build_app_context
 logger = logging.getLogger("gaokao")
 
 
-async def _init_engine(app, attr_name, factory, *args, **kwargs):
+async def _init_engine(app: FastAPI, attr_name: str, factory: Any, *args: Any, **kwargs: Any) -> Any:
     """同步构造型引擎初始化，异常时仅警告不中断启动流程。"""
     try:
         instance = factory(*args, **kwargs)
@@ -42,7 +43,7 @@ async def _init_engine(app, attr_name, factory, *args, **kwargs):
         return None
 
 
-async def _init_async(app, coro, label="unknown"):
+async def _init_async(app: FastAPI, coro: Any, label: str = "unknown") -> None:
     """异步型引擎初始化（如 await .start()），异常时仅警告。"""
     try:
         await coro
@@ -51,11 +52,11 @@ async def _init_async(app, coro, label="unknown"):
         logger.warning("引擎 %s 异步初始化失败: %s", label, e)
 
 
-def create_lifespan():
+def create_lifespan() -> Any:
     """返回一个 FastAPI lifespan 上下文管理器。"""
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # ---------- 启动 ----------
         os.makedirs(DATA_DIR, exist_ok=True)
         await init_db()       # 含版本化迁移（T01），不删库

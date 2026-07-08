@@ -3,7 +3,7 @@
 包含：全文搜索、搜索建议、题目搜索。
 """
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query
 
@@ -27,8 +27,8 @@ async def search_papers(
     sort: str = "relevance",
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
-    search_engine=Depends(get_search_engine),
-):
+    search_engine: Any = Depends(get_search_engine),
+) -> Any:
     return await search_engine.search(
         q=q, subject=subject, paper_type=paper_type, year=year,
         province=province, exam_tag=exam_tag, source_priority=source_priority,
@@ -41,8 +41,8 @@ async def search_papers(
 async def search_suggest(
     q: str = Query(..., min_length=1),
     limit: int = Query(10, ge=1, le=20),
-    search_engine=Depends(get_search_engine),
-):
+    search_engine: Any = Depends(get_search_engine),
+) -> Any:
     suggestions = await search_engine.suggest(q, limit)
     return {"query": q, "suggestions": suggestions}
 
@@ -54,8 +54,8 @@ async def search_questions(
     q_type: Optional[str] = None,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
-    search_engine=Depends(get_search_engine),
-):
+    search_engine: Any = Depends(get_search_engine),
+) -> Any:
     return await search_engine.search_questions(
         q=q, subject=subject, q_type=q_type, page=page, size=size
     )

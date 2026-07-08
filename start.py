@@ -16,7 +16,7 @@ sys.path.insert(0, BASE_DIR)
 from config import DB_PATH
 
 
-def install_deps():
+def install_deps() -> None:
     """安装依赖（仅在显式 --install-deps 时调用，R-5）"""
     print("=" * 60)
     print("安装依赖包...")
@@ -29,7 +29,7 @@ def install_deps():
     print("依赖就绪!\n")
 
 
-def generate_sample(force=False):
+def generate_sample(force: bool = False) -> None:
     """生成1000份试卷数据
 
     Args:
@@ -67,7 +67,7 @@ def generate_sample(force=False):
     print()
 
 
-def start_server():
+def start_server() -> None:
     """启动 Web 服务"""
     print("=" * 60)
     print("启动高考模拟卷智能分析系统 v5.1")

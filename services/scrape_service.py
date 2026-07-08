@@ -1,7 +1,7 @@
 """
 采集业务层：封装采集落库、状态查询等业务编排。
 """
-from typing import Optional
+from typing import Any, Optional
 
 from region_validator import RegionValidator
 from repositories.paper_repo import PaperRepository
@@ -13,7 +13,7 @@ class ScrapeService:
     def __init__(self, paper_repo: PaperRepository):
         self.paper_repo = paper_repo
 
-    async def get_scrape_status(self, db, auto_scraper) -> dict:
+    async def get_scrape_status(self, db: Any, auto_scraper: Any) -> dict[str, Any]:
         """获取采集状态统计"""
         total = await db.execute_fetchone("SELECT COUNT(*) as cnt FROM papers")
         by_type = await db.execute_fetchall(
@@ -51,11 +51,11 @@ class ScrapeService:
         }
 
     async def collect_papers(
-        self, db, scraper_manager, dedup_engine,
+        self, db: Any, scraper_manager: Any, dedup_engine: Any,
         year: int = 2026,
         subjects: Optional[str] = None,
         keyword: Optional[str] = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """采集并落库试卷"""
         sub_list = subjects.split(",") if subjects else None
         results = await scraper_manager.collect_all(year, sub_list, keyword=keyword or "")
