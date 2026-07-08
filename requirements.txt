@@ -17,3 +17,4 @@ passlib[bcrypt]>=1.7.4
 redis>=5.0
 celery>=5.3
 numba>=0.59
+meilisearch>=0.30

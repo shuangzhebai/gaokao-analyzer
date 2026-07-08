@@ -623,6 +623,10 @@ CACHE_TTL: int = int(os.environ.get("CACHE_TTL", "300"))  # 默认 5 分钟
 CELERY_BROKER_URL: str = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
 CELERY_RESULT_BACKEND: str = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
 
+# Meilisearch 全文搜索配置（P2-04，无 Meilisearch 时降级为 SQLite FTS5）
+MEILISEARCH_URL: str = os.environ.get("MEILISEARCH_URL", "http://localhost:7700")
+MEILISEARCH_API_KEY: str = os.environ.get("MEILISEARCH_API_KEY", "")
+
 
 # 确保目录存在
 for d in [DATA_DIR, DOWNLOAD_DIR]:

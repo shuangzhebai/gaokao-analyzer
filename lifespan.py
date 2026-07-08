@@ -111,6 +111,14 @@ def create_lifespan() -> Any:
 
         await init_cache()
 
+        # P2-04: Meilisearch 索引初始化（无 Meilisearch 时自动降级）
+        try:
+            from search import MeiliSearchBackend
+
+            await MeiliSearchBackend.ensure_indexes()
+        except Exception:
+            pass
+
         yield
 
         # ---------- 关闭 ----------

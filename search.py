@@ -5,13 +5,140 @@ v5.1: 增强中文分词搜索、多关键词 AND/OR、模糊匹配；统一分�
       修复相关度排序(B-1)；导出 search_similar_titles 供查重复用降级策略(B-3)
 """
 # mypy: disable-error-code="no-untyped-def,no-any-return,call-overload,operator,type-arg,assignment,var-annotated,misc,index,attr-defined,return-value,func-returns-value,return,has-type,unused-ignore,arg-type"
+import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 from models import get_db
 from tokenizer import tokenize
 
 logger = logging.getLogger("gaokao")
+
+# P2-04: Meilisearch 全文搜索（可选，未部署时自动降级为 FTS5）
+_HAS_MEILI = False
+_meili_client: Any = None
+
+try:
+    import meilisearch as _meili
+
+    _meili_url = __import__("config", fromlist=["MEILISEARCH_URL"]).MEILISEARCH_URL
+    _meili_key = __import__("config", fromlist=["MEILISEARCH_API_KEY"]).MEILISEARCH_API_KEY
+    _meili_client = _meili.Client(_meili_url, _meili_key)
+    # 简单连通性测试
+    try:
+        _meili_client.health()
+        _HAS_MEILI = True
+        logger.info("Meilisearch 已连接 — 搜索将优先使用 Meilisearch")
+    except Exception:
+        _meili_client = None
+        logger.info("Meilisearch 不可用 — 降级为 SQLite FTS5")
+except ImportError:
+    logger.info("meilisearch 库未安装 — 使用 SQLite FTS5")
+
+
+class MeiliSearchBackend:
+    """Meilisearch 搜索后端封装。"""
+
+    INDEX_PAPERS = "papers"
+    INDEX_QUESTIONS = "questions"
+
+    @classmethod
+    async def ensure_indexes(cls) -> None:
+        """确保索引存在（幂等）。"""
+        if not _HAS_MEILI or _meili_client is None:
+            return
+        try:
+            for idx_name in [cls.INDEX_PAPERS, cls.INDEX_QUESTIONS]:
+                try:
+                    _meili_client.get_index(idx_name)
+                except Exception:
+                    _meili_client.create_index(idx_name, {"primaryKey": "id"})
+                    logger.info("Meilisearch 索引已创建: %s", idx_name)
+            # 配置可搜索属性
+            _meili_client.index(cls.INDEX_PAPERS).update_searchable_attributes(
+                ["title", "subject_name", "province", "school", "exam_tag", "tags", "year"]
+            )
+            _meili_client.index(cls.INDEX_PAPERS).update_filterable_attributes(
+                ["subject", "paper_type", "year", "province", "analysis_status"]
+            )
+            _meili_client.index(cls.INDEX_PAPERS).update_sortable_attributes(["year", "created_at"])
+        except Exception as e:
+            logger.warning("Meilisearch 索引配置失败: %s", e)
+
+    @classmethod
+    async def index_paper(cls, paper: dict) -> None:
+        """索引单份试卷。"""
+        if not _HAS_MEILI or _meili_client is None:
+            return
+        try:
+            doc = {
+                "id": str(paper["id"]),
+                "title": paper.get("title", ""),
+                "subject_name": paper.get("subject_name", ""),
+                "subject": paper.get("subject", ""),
+                "paper_type": paper.get("paper_type", ""),
+                "year": paper.get("year", 0),
+                "province": paper.get("province", ""),
+                "school": paper.get("school", ""),
+                "exam_tag": paper.get("exam_tag", ""),
+                "tags": json.dumps(paper.get("tags", []), ensure_ascii=False),
+                "analysis_status": paper.get("analysis_status", ""),
+                "created_at": paper.get("created_at", ""),
+            }
+            _meili_client.index(cls.INDEX_PAPERS).add_documents([doc])
+        except Exception as e:
+            logger.debug("Meilisearch index_paper 失败: %s", e)
+
+    @classmethod
+    async def search(cls, q: str, filters: dict[str, Any] | None = None,
+                     sort: str = "relevance", page: int = 1, size: int = 20) -> dict | None:
+        """通过 Meilisearch 搜索，失败返回 None 触发 FTS5 降级。"""
+        if not _HAS_MEILI or _meili_client is None:
+            return None
+        try:
+            # 构建筛选条件
+            filter_exprs = []
+            if filters:
+                for key, val in filters.items():
+                    if val is not None and val != "":
+                        filter_exprs.append(f'{key} = "{val}"')
+            # 排序
+            sort_exprs = []
+            if sort == "year_desc":
+                sort_exprs.append("year:desc")
+            elif sort == "year_asc":
+                sort_exprs.append("year:asc")
+            # 搜索
+            result = _meili_client.index(cls.INDEX_PAPERS).search(
+                q,
+                {"filter": filter_exprs, "sort": sort_exprs,
+                 "page": page, "hitsPerPage": size,
+                 "attributesToHighlight": ["title"],
+                 "attributesToCrop": ["title"], "cropLength": 50},
+            )
+            hits = result.get("hits", [])
+            total = result.get("totalHits", 0)
+            return {
+                "total": total,
+                "page": page,
+                "size": size,
+                "data": [{
+                    "id": int(h["id"]),
+                    "title": h.get("_formatted", {}).get("title", h.get("title", "")),
+                    "subject": h.get("subject", ""),
+                    "subject_name": h.get("subject_name", ""),
+                    "paper_type": h.get("paper_type", ""),
+                    "year": h.get("year", ""),
+                    "province": h.get("province", ""),
+                    "school": h.get("school", ""),
+                    "exam_tag": h.get("exam_tag", ""),
+                    "analysis_status": h.get("analysis_status", ""),
+                    "created_at": h.get("created_at", ""),
+                } for h in hits],
+            }
+        except Exception as e:
+            logger.debug("Meilisearch search 失败，降级 FTS5: %s", e)
+            return None
 
 
 class SearchEngine:
@@ -59,6 +186,23 @@ class SearchEngine:
         Returns:
             { total, page, size, query, data }
         """
+        # P2-04: 优先尝试 Meilisearch 搜索
+        if _HAS_MEILI and _meili_client is not None:
+            meili_filters = {}
+            if subject:
+                meili_filters["subject"] = subject
+            if paper_type:
+                meili_filters["paper_type"] = paper_type
+            if province:
+                meili_filters["province"] = province
+            if analysis_status:
+                meili_filters["analysis_status"] = analysis_status
+            meili_result = await MeiliSearchBackend.search(q, meili_filters, sort, page, size)
+            if meili_result is not None:
+                meili_result["query"] = q
+                return meili_result
+
+        # 降级：SQLite FTS5
         async for db in get_db():
             conditions = []
             params = []
