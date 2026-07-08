@@ -226,6 +226,23 @@ async def index(request: Request) -> Any:
     return HTMLResponse(request.app.state.index_html)
 
 
+# P1-04: 服务端 locale 文件（允许前端 i18n.js 通过 GET 加载）
+import json as json_mod
+import os
+
+
+@app.get("/locales/{lang}.json")
+async def get_locale(lang: str) -> dict[str, str]:
+    locale_path = os.path.join(os.path.dirname(__file__), "locales", f"{lang}.json")
+    try:
+        with open(locale_path, "r", encoding="utf-8") as f:
+            return json_mod.load(f)
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        return {}
+
+
 # ============ 健康检查 ============
 
 @app.get("/api/health")
