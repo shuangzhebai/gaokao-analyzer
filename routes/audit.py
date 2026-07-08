@@ -1,7 +1,8 @@
 """
 地区校验 / 审核 / 交叉验证 / 校准 路由（T03/T04）
 包含：地区层级、地区校验、批量纠正、真实性审核、交叉验证、校准数据。
-- T04：DeepSeek Key 改为运行时惰性读取 get_deepseek_key()
+
+T01 重构：batch_fix_regions 的裸 SQL 已抽取到 services/paper_service.py。
 """
 import logging
 from typing import Optional
@@ -14,6 +15,8 @@ from config import REGION_HIERARCHY, CALIBRATION_DATA, get_deepseek_key
 from region_validator import RegionValidator
 from auth_verifier import AuthVerifier
 from auto_scraper import CrossVerifier
+from deps import get_paper_service
+from services.paper_service import PaperService
 
 logger = logging.getLogger("gaokao")
 router = APIRouter()
@@ -34,26 +37,13 @@ async def validate_region(province: str = "", city: str = "", title: str = ""):
 
 
 @router.post("/api/regions/batch-fix")
-async def batch_fix_regions(limit: int = 100, db: Connection = Depends(get_db)):
+async def batch_fix_regions(
+    limit: int = 100,
+    db: Connection = Depends(get_db),
+    service: PaperService = Depends(get_paper_service),
+):
     """批量纠正试卷地区信息"""
-    rows = await db.execute_fetchall(
-        "SELECT id, title, province, school FROM papers LIMIT ?", (limit,)
-    )
-    papers = [dict(r) for r in rows]
-
-    results = RegionValidator.batch_validate(papers)
-    fixed_count = 0
-
-    for r in results:
-        if r["auto_corrected"] and r["corrected_province"]:
-            await db.execute(
-                "UPDATE papers SET province = ? WHERE id = ?",
-                (r["corrected_province"], r["paper_id"]),
-            )
-            fixed_count += 1
-    await db.commit()
-
-    return {"checked": len(results), "fixed": fixed_count, "details": results}
+    return await service.batch_fix_regions(db, limit=limit)
 
 
 # ============ 真实性审核 API ============
