@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'website/**'
+      - 'docs/website/**'
 
 jobs:
   deploy:
@@ -25,7 +25,7 @@ jobs:
       
       - name: Build Docusaurus
         run: |
-          cd website
+          cd docs/website
           npm ci
           npm run build
       
@@ -34,7 +34,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: website/build
+          path: docs/website/build
       
       - name: Deploy to GitHub Pages
         id: deployment

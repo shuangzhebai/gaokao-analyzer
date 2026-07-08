@@ -34,3 +34,4 @@ env/
 venv/
 verify_v5.ipynb
 website/build
+/docs/website/node_modules
