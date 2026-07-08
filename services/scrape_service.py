@@ -1,10 +1,16 @@
 """
 采集业务层：封装采集落库、状态查询等业务编排。
 """
+import logging
 from typing import Any, Optional
 
 from region_validator import RegionValidator
 from repositories.paper_repo import PaperRepository
+
+logger = logging.getLogger("gaokao")
+
+_MIN_YEAR = 2000
+_MAX_YEAR = 2030
 
 
 class ScrapeService:
@@ -57,8 +63,15 @@ class ScrapeService:
         keyword: Optional[str] = None,
     ) -> dict[str, Any]:
         """采集并落库试卷"""
+        if year < _MIN_YEAR or year > _MAX_YEAR:
+            raise ValueError(f"年份无效: {year}，需在 {_MIN_YEAR}-{_MAX_YEAR} 之间")
+
         sub_list = subjects.split(",") if subjects else None
-        results = await scraper_manager.collect_all(year, sub_list, keyword=keyword or "")
+        try:
+            results = await scraper_manager.collect_all(year, sub_list, keyword=keyword or "")
+        except Exception as e:
+            logger.exception("采集失败: year=%s, subjects=%s", year, subjects)
+            raise RuntimeError(f"采集过程出错: {e}") from e
 
         saved = []
         skipped = []

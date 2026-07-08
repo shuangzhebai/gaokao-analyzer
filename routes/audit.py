@@ -41,7 +41,7 @@ async def validate_region(province: str = "", city: str = "", title: str = "") -
 @router.post("/api/regions/batch-fix", include_in_schema=False)
 @router.post("/api/v1/regions/batch-fix")
 async def batch_fix_regions(
-    limit: int = 100,
+    limit: int = Query(100, ge=1, le=1000),
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
 ) -> dict[str, Any]:
@@ -54,17 +54,25 @@ async def batch_fix_regions(
 @router.post("/api/audit/paper/{paper_id}", include_in_schema=False)
 @router.post("/api/v1/audit/paper/{paper_id}")
 async def audit_paper(paper_id: int) -> dict[str, Any]:
-    result = await AuthVerifier.audit_paper(
-        paper_id, deepseek_key=get_deepseek_key()
-    )
-    return result
+    try:
+        result = await AuthVerifier.audit_paper(
+            paper_id, deepseek_key=get_deepseek_key()
+        )
+        return result
+    except Exception:
+        logger.exception("审核试卷失败: paper_id=%s", paper_id)
+        raise HTTPException(500, "审核试卷时发生内部错误")
 
 
 @router.post("/api/audit/batch", include_in_schema=False)
 @router.post("/api/v1/audit/batch")
-async def batch_audit(limit: int = 100, unverified_only: bool = True) -> dict[str, Any]:
-    result = await AuthVerifier.batch_audit(limit=limit, unverified_only=unverified_only)
-    return result
+async def batch_audit(limit: int = Query(100, ge=1, le=500), unverified_only: bool = True) -> dict[str, Any]:
+    try:
+        result = await AuthVerifier.batch_audit(limit=limit, unverified_only=unverified_only)
+        return result
+    except Exception:
+        logger.exception("批量审核失败")
+        raise HTTPException(500, "批量审核时发生内部错误")
 
 
 @router.get("/api/audit/summary", include_in_schema=False)
@@ -78,16 +86,20 @@ async def audit_summary() -> dict[str, Any]:
 @router.post("/api/verify/paper", include_in_schema=False)
 @router.post("/api/v1/verify/paper")
 async def verify_paper_authenticity(
-    title: str = Query(...),
+    title: str = Query(..., min_length=1, max_length=500),
     subject_id: str = Query(...),
-    year: int = Query(...),
+    year: int = Query(..., ge=2000, le=2030),
     province: str = "",
 ) -> dict[str, Any]:
-    result = await CrossVerifier.verify_paper(
-        title=title, subject_id=subject_id, year=year, province=province,
-        deepseek_key=get_deepseek_key(),
-    )
-    return result
+    try:
+        result = await CrossVerifier.verify_paper(
+            title=title, subject_id=subject_id, year=year, province=province,
+            deepseek_key=get_deepseek_key(),
+        )
+        return result
+    except Exception:
+        logger.exception("交叉验证失败")
+        raise HTTPException(500, "交叉验证时发生内部错误")
 
 
 # ============ 校准数据 API ============

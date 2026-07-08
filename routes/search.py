@@ -16,7 +16,7 @@ router = APIRouter()
 @router.get("/api/search", include_in_schema=False)
 @router.get("/api/v1/search")
 async def search_papers(
-    q: str = "",
+    q: str = Query("", max_length=200),
     subject: Optional[str] = None,
     paper_type: Optional[str] = None,
     year: Optional[int] = None,

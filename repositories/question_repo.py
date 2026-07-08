@@ -4,6 +4,9 @@
 from typing import Any, Optional
 
 
+_MAX_BATCH_QUESTIONS = 500
+
+
 class QuestionRepository:
     """题目数据访问对象"""
 
@@ -14,7 +17,9 @@ class QuestionRepository:
         )
 
     async def create_batch(self, db: Any, paper_id: int, questions: list[dict[str, Any]]) -> None:
-        """批量插入题目"""
+        """批量插入题目（最多 500 条）。"""
+        if len(questions) > _MAX_BATCH_QUESTIONS:
+            raise ValueError(f"批量插入题目数超过上限 {_MAX_BATCH_QUESTIONS}")
         for q in questions:
             await db.execute(
                 """INSERT INTO questions
@@ -83,9 +88,11 @@ class QuestionRepository:
         )
 
     async def get_by_paper_ids(self, db: Any, paper_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
-        """批量获取多份试卷的题目，返回 {paper_id: [questions]}"""
+        """批量获取多份试卷的题目，返回 {paper_id: [questions]}（最多 100 份）。"""
         if not paper_ids:
             return {}
+        if len(paper_ids) > 100:
+            raise ValueError("paper_ids 数量超过上限 100")
         placeholders = ",".join("?" * len(paper_ids))
         rows = await db.execute_fetchall(
             f"SELECT * FROM questions WHERE paper_id IN ({placeholders}) ORDER BY q_number",
@@ -106,8 +113,8 @@ class QuestionRepository:
                (paper_id, q_number, q_type, content, options, score, knowledge_points, content_hash)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
-                data["paper_id"],
-                data["q_number"],
+                data.get("paper_id"),
+                data.get("q_number", 0),
                 data.get("q_type", "choice"),
                 data.get("content"),
                 data.get("options"),

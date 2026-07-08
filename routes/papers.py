@@ -43,7 +43,7 @@ async def list_papers(
     subject: Optional[str] = None,
     paper_type: Optional[str] = None,
     year: Optional[int] = None,
-    province: Optional[str] = None,
+    province: Optional[str] = Query(None, max_length=100),
     analysis_status: Optional[str] = None,
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
@@ -96,6 +96,8 @@ async def upload_paper(
     dedup_engine: Any = Depends(get_dedup_engine),
     service: PaperService = Depends(get_paper_service),
 ) -> Any:
+    if year < 2000 or year > 2030:
+        raise HTTPException(400, f"年份无效: {year}，需在 2000-2030 之间")
     return await service.upload_paper(
         db, file, subject, paper_type, title, year, province,
         paper_parser, kp_mapper, dedup_engine,
@@ -136,7 +138,7 @@ async def get_quality_questions(
     subject: Optional[str] = None,
     q_type: Optional[str] = None,
     min_score: float = 85,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
 ) -> Any:
@@ -152,7 +154,7 @@ async def get_quality_questions(
 async def batch_estimate_irt(
     subject: Optional[str] = None,
     paper_type: Optional[str] = None,
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
     db: Connection = Depends(get_db),
     irt_model: Any = Depends(get_irt_model),
     service: PaperService = Depends(get_paper_service),
@@ -182,7 +184,7 @@ async def batch_simulate(
 @router.post("/api/papers/{paper_id}/estimate-irt", include_in_schema=False)
 @router.post("/api/v1/papers/{paper_id}/estimate-irt")
 async def estimate_irt(
-    paper_id: int, n_sim_students: int = 5000,
+    paper_id: int, n_sim_students: int = Query(5000, ge=100, le=500000),
     db: Connection = Depends(get_db),
     irt_model: Any = Depends(get_irt_model),
     service: PaperService = Depends(get_paper_service),
@@ -216,6 +218,8 @@ async def fit_analysis(
     simulator: Any = Depends(get_simulator),
     service: PaperService = Depends(get_paper_service),
 ) -> Any:
+    if sim_paper_id == ref_paper_id:
+        raise HTTPException(400, "模拟卷和参考卷不能是同一份试卷")
     return await service.fit_analysis(
         db, sim_paper_id, ref_paper_id, subject, fitting_analyzer, simulator,
     )

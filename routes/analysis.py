@@ -45,15 +45,21 @@ async def analyze_papers_batch_endpoint(
     analyzer: PaperAnalyzer = Depends(get_paper_analyzer),
     service: AnalysisService = Depends(get_analysis_service),
 ) -> Any:
-    """批量并行分析多份试卷（接收 paper id 列表），返回与输入顺序一致的报告数组。"""
+    """批量并行分析多份试卷（接收 paper id 列表，最多 50 份），返回与输入顺序一致的报告数组。"""
     if not paper_ids:
         raise HTTPException(400, "paper_ids 不能为空")
+    if len(paper_ids) > 50:
+        raise HTTPException(400, f"paper_ids 最多 50 份，收到 {len(paper_ids)} 份")
 
     # 读取所有试卷（保持输入顺序）
     loaded = []
     for pid in paper_ids:
-        paper, paper_dict = await service.load_paper_for_analysis(db, pid)
-        loaded.append((pid, paper_dict))
+        try:
+            paper, paper_dict = await service.load_paper_for_analysis(db, pid)
+            loaded.append((pid, paper_dict))
+        except Exception:
+            logger.exception("加载试卷失败: paper_id=%s", pid)
+            loaded.append((pid, None))
 
     # 仅对有题目的试卷做并行分析
     to_analyze = [(pid, pd) for pid, pd in loaded if pd and pd["questions"]]
@@ -61,13 +67,20 @@ async def analyze_papers_batch_endpoint(
     if to_analyze:
         papers = [pd for _pid, pd in to_analyze]
         subject = papers[0]["subject"] if papers else "math"
-        reports = await analyze_papers_batch(
-            papers, max_workers=max_workers, subject_id=subject, analyzer=analyzer
-        )
-        for (pid, _pd), rep in zip(to_analyze, reports):
-            if "error" not in rep:
-                await service._store_report(db, pid, rep)
-            result_map[pid] = rep
+        try:
+            reports = await analyze_papers_batch(
+                papers, max_workers=max_workers, subject_id=subject, analyzer=analyzer
+            )
+            for (pid, _pd), rep in zip(to_analyze, reports):
+                if "error" not in rep:
+                    try:
+                        await service._store_report(db, pid, rep)
+                    except Exception:
+                        logger.exception("存储分析报告失败: paper_id=%s", pid)
+                result_map[pid] = rep
+        except Exception as e:
+            logger.exception("批量分析失败")
+            raise HTTPException(500, f"批量分析出错: {e}") from e
 
     results = []
     for pid, pd in loaded:

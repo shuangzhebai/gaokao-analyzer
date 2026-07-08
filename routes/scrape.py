@@ -8,7 +8,7 @@ import logging
 from typing import Any, Optional
 
 from aiosqlite import Connection
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 
 from models import get_db
 from deps import get_scraper_manager, get_dedup_engine, get_auto_scraper, get_scrape_service
@@ -31,7 +31,7 @@ async def scrape_status(
 @router.post("/api/scrape/collect", include_in_schema=False)
 @router.post("/api/v1/scrape/collect")
 async def collect_papers(
-    year: int = 2026,
+    year: int = Query(2026, ge=2000, le=2030),
     subjects: Optional[str] = None,
     keyword: Optional[str] = None,
     db: Connection = Depends(get_db),

@@ -4,6 +4,7 @@
 """
 import hashlib
 import json
+import logging
 import os
 from typing import Any, Optional
 
@@ -15,6 +16,8 @@ from region_validator import RegionValidator
 from repositories.paper_repo import PaperRepository
 from repositories.question_repo import QuestionRepository
 from repositories.analysis_repo import AnalysisRepository
+
+logger = logging.getLogger("gaokao")
 
 
 class PaperService:
@@ -103,6 +106,15 @@ class PaperService:
                 413,
                 f"文件过大（最大 50MB），实际 {len(content) / 1024 / 1024:.1f}MB",
             )
+        # 校验 content-type（仅对常见类型做基本限制）
+        content_type = (file.content_type or "").lower()
+        if content_type and content_type not in (
+            "application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword", "text/plain", "text/html", "application/json",
+            "text/markdown", "",
+        ):
+            raise HTTPException(400, f"不支持的文件 MIME 类型: {content_type}")
+
         with open(save_path, "wb") as f:
             f.write(content)
 
@@ -275,7 +287,8 @@ class PaperService:
         return result
 
     async def get_quality_questions(self, db: Any, subject: Optional[str] = None, q_type: Optional[str] = None, limit: int = 50) -> dict[str, Any]:
-        """优质题推荐"""
+        """优质题推荐（limit 1-200）。"""
+        limit = max(1, min(limit, 200))
         rows = await self.question_repo.get_quality_questions(
             db, subject=subject, q_type=q_type, limit=limit,
         )
@@ -331,50 +344,57 @@ class PaperService:
         )
 
         estimated = []
+        errors = []
         for paper_id in paper_ids:
-            questions = await self.question_repo.list_by_paper(db, paper_id)
-            if not questions:
-                continue
-            if questions[0].get("irt_a") is not None:
-                continue
+            try:
+                questions = await self.question_repo.list_by_paper(db, paper_id)
+                if not questions:
+                    continue
+                if questions[0].get("irt_a") is not None:
+                    continue
 
-            n_q = len(questions)
-            rng = np.random.default_rng(42)
-            thetas = rng.normal(0, 1, 5000)
+                n_q = len(questions)
+                rng = np.random.default_rng(42)
+                thetas = rng.normal(0, 1, 5000)
 
-            response_matrix = np.zeros((5000, n_q), dtype=int)
-            for j, q in enumerate(questions):
-                q_type = q["q_type"]
-                if q_type == "choice":
-                    p_correct = rng.uniform(0.50, 0.85)
-                elif q_type == "fill":
-                    p_correct = rng.uniform(0.25, 0.60)
-                else:
-                    p_correct = rng.uniform(0.10, 0.50)
-                difficulty_ramp = min(j / max(n_q - 1, 1) * 0.3, 0.3)
-                p_correct = max(0.05, p_correct - difficulty_ramp)
-                response_matrix[:, j] = rng.binomial(1, p_correct, 5000)
+                response_matrix = np.zeros((5000, n_q), dtype=int)
+                for j, q in enumerate(questions):
+                    q_type = q["q_type"]
+                    if q_type == "choice":
+                        p_correct = rng.uniform(0.50, 0.85)
+                    elif q_type == "fill":
+                        p_correct = rng.uniform(0.25, 0.60)
+                    else:
+                        p_correct = rng.uniform(0.10, 0.50)
+                    difficulty_ramp = min(j / max(n_q - 1, 1) * 0.3, 0.3)
+                    p_correct = max(0.05, p_correct - difficulty_ramp)
+                    response_matrix[:, j] = rng.binomial(1, p_correct, 5000)
 
-            params_list = irt_model.estimate_all_questions(thetas, response_matrix)
+                params_list = irt_model.estimate_all_questions(thetas, response_matrix)
 
-            for j, params in enumerate(params_list):
-                q = questions[j]
-                await self.question_repo.update_irt(
-                    db, q["id"], params["a"], params["b"], params["c"], params["a"],
+                for j, params in enumerate(params_list):
+                    q = questions[j]
+                    await self.question_repo.update_irt(
+                        db, q["id"], params["a"], params["b"], params["c"], params["a"],
+                    )
+
+                await self.paper_repo.update_analysis_status(db, paper_id, "irt_estimated")
+                await self.paper_repo.update_difficulty(
+                    db, paper_id, float(np.mean([p["b"] for p in params_list])),
                 )
-
-            await self.paper_repo.update_analysis_status(db, paper_id, "irt_estimated")
-            await self.paper_repo.update_difficulty(
-                db, paper_id, float(np.mean([p["b"] for p in params_list])),
-            )
-            estimated.append(paper_id)
+                estimated.append(paper_id)
+            except Exception:
+                logger.exception("批量 IRT 估计失败: paper_id=%s", paper_id)
+                errors.append(paper_id)
 
         await db.commit()
-        return {"estimated_count": len(estimated), "paper_ids": estimated}
+        return {"estimated_count": len(estimated), "paper_ids": estimated, "errors": errors}
 
     async def run_simulation(self, db: Any, paper_id: int, simulator: Any, n_students: Optional[int] = None) -> Any:
         """单卷蒙特卡洛模拟"""
         n = n_students or MC_CONFIG["n_students"]
+        if not isinstance(n, int) or n < 100 or n > 500000:
+            raise HTTPException(400, f"模拟人数无效: {n}，需在 100-500000 之间")
 
         questions = await self.question_repo.list_by_paper(db, paper_id)
         if not questions:
@@ -456,6 +476,8 @@ class PaperService:
         fitting_analyzer: Any, simulator: Any,
     ) -> Any:
         """拟合分析（模拟卷 vs 真题）"""
+        if sim_paper_id == ref_paper_id:
+            raise HTTPException(400, "模拟卷和参考卷不能是同一份试卷")
         sim_qs = await self.question_repo.list_by_paper(db, sim_paper_id)
         ref_qs = await self.question_repo.list_by_paper(db, ref_paper_id)
 

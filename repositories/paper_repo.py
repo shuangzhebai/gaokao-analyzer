@@ -100,15 +100,21 @@ class PaperRepository:
         return cursor.lastrowid
 
     async def delete(self, db: Any, paper_id: int) -> None:
-        """删除试卷及其关联数据（通过 ON DELETE CASCADE 删子表）。"""
-        await db.execute("DELETE FROM questions WHERE paper_id = ?", (paper_id,))
-        await db.execute("DELETE FROM analysis_results WHERE paper_id = ?", (paper_id,))
-        await db.execute(
-            "DELETE FROM dedup_records WHERE paper_id_1 = ? OR paper_id_2 = ?",
-            (paper_id, paper_id),
-        )
-        await db.execute("DELETE FROM verification_audit WHERE paper_id = ?", (paper_id,))
-        await db.execute("DELETE FROM papers WHERE id = ?", (paper_id,))
+        """删除试卷及其关联数据。事务包裹防部分删除。"""
+        await db.execute("BEGIN")
+        try:
+            await db.execute("DELETE FROM questions WHERE paper_id = ?", (paper_id,))
+            await db.execute("DELETE FROM analysis_results WHERE paper_id = ?", (paper_id,))
+            await db.execute(
+                "DELETE FROM dedup_records WHERE paper_id_1 = ? OR paper_id_2 = ?",
+                (paper_id, paper_id),
+            )
+            await db.execute("DELETE FROM verification_audit WHERE paper_id = ?", (paper_id,))
+            await db.execute("DELETE FROM papers WHERE id = ?", (paper_id,))
+            await db.execute("COMMIT")
+        except Exception:
+            await db.execute("ROLLBACK")
+            raise
 
     async def update_analysis_status(self, db: Any, paper_id: int, status: str) -> None:
         """更新分析状态"""
@@ -306,7 +312,8 @@ class PaperRepository:
         return row is not None
 
     async def get_papers_for_batch_fix(self, db: Any, limit: int = 100) -> Any:
-        """获取待批量纠正地区的试卷"""
+        """获取待批量纠正地区的试卷（limit 1-1000）。"""
+        limit = max(1, min(limit, 1000))
         return await db.execute_fetchall(
             "SELECT id, title, province, school FROM papers LIMIT ?", (limit,)
         )

@@ -2,6 +2,7 @@
 认证服务（T05）
 JWT 令牌签发/验证、密码哈希、用户注册/登录。
 """
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -18,6 +19,11 @@ ROLE_PRIORITY: dict[str, int] = {
     "teacher": 1,
     "viewer": 2,
 }
+
+_USERNAME_MIN = 3
+_USERNAME_MAX = 50
+_PASSWORD_MIN = 6
+_EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 
 class AuthService:
@@ -81,6 +87,15 @@ class AuthService:
         Raises:
             ValueError: 用户名已存在或角色无效
         """
+        # 校验输入
+        username = username.strip()
+        if len(username) < _USERNAME_MIN or len(username) > _USERNAME_MAX:
+            raise ValueError(f"用户名长度需在 {_USERNAME_MIN}-{_USERNAME_MAX} 字符之间")
+        if len(password) < _PASSWORD_MIN:
+            raise ValueError(f"密码长度不能少于 {_PASSWORD_MIN} 个字符")
+        if email and not _EMAIL_REGEX.match(email):
+            raise ValueError("邮箱格式无效")
+
         # 校验角色
         if role not in ROLE_PRIORITY:
             raise ValueError(f"无效角色: {role}，可选: {', '.join(ROLE_PRIORITY)}")

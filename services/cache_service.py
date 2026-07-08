@@ -35,8 +35,8 @@ async def _close_redis() -> None:
     if _redis_client is not None:
         try:
             await _redis_client.aclose()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Redis 关闭失败: %s", e)
         _redis_client = None
     _HAS_REDIS = False
 
@@ -78,7 +78,7 @@ class CacheService:
                     self._set_l1(key, val, 60)
                     return val
             except Exception:
-                pass
+                logger.warning("Redis get(%s) 失败", key)
         return None
 
     async def set(self, key: str, value: str | dict[str, Any], ttl: int = 0) -> None:
@@ -95,7 +95,7 @@ class CacheService:
             try:
                 await _redis_client.set(key, payload, ex=ttl)
             except Exception:
-                pass
+                logger.warning("Redis set(%s) 失败", key)
 
     async def delete(self, key: str) -> None:
         """删除缓存条目。"""
@@ -104,7 +104,7 @@ class CacheService:
             try:
                 await _redis_client.delete(key)
             except Exception:
-                pass
+                logger.warning("Redis delete(%s) 失败", key)
 
 
 # 模块级单例

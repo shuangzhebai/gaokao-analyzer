@@ -3,6 +3,7 @@
 每个方法第一个参数为 db（从路由层传入）。
 """
 import json
+import logging
 from typing import Any, Optional
 
 import numpy as np
@@ -11,6 +12,8 @@ from fastapi import HTTPException
 from repositories.paper_repo import PaperRepository
 from repositories.question_repo import QuestionRepository
 from repositories.analysis_repo import AnalysisRepository
+
+logger = logging.getLogger("gaokao")
 
 
 class AnalysisService:
@@ -62,7 +65,11 @@ class AnalysisService:
             raise HTTPException(404, "试卷不存在")
         if not paper_dict["questions"]:
             raise HTTPException(400, "该试卷没有题目，无法分析")
-        report = analyzer.analyze(paper_dict)
+        try:
+            report = analyzer.analyze(paper_dict)
+        except Exception as e:
+            logger.exception("分析试卷失败: paper_id=%s", paper_id)
+            raise HTTPException(500, f"分析试卷时发生错误: {e}") from e
         await self._store_report(db, paper_id, report)
         return report
 
@@ -93,9 +100,11 @@ class AnalysisService:
 
     async def list_knowledge_points(self, db: Any, subject_id: str) -> Any:
         """获取某科目的知识点列表"""
+        if not subject_id or not subject_id.strip():
+            raise HTTPException(400, "subject_id 不能为空")
         return await db.execute_fetchall(
             "SELECT * FROM knowledge_points WHERE subject_id = ? ORDER BY code",
-            (subject_id,),
+            (subject_id.strip(),),
         )
 
 
