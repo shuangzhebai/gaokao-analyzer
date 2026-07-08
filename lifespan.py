@@ -91,8 +91,12 @@ def create_lifespan() -> Any:
                         "official_docs.seed_official_docs"),
         )
 
-        # 预读前端页面到内存（B-4：避免请求期同步 open() 阻塞事件循环）
-        html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html")
+        # 预读前端页面到内存（优先读取 frontend/dist 构建产物）
+        frontend_paths = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend", "dist", "index.html"),
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "index.html"),
+        ]
+        html_path = next((p for p in frontend_paths if os.path.exists(p)), frontend_paths[-1])
         try:
             with open(html_path, "r", encoding="utf-8") as f:
                 app.state.index_html = f.read()
