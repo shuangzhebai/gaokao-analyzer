@@ -130,6 +130,10 @@ def create_lifespan() -> Any:
         from services.cache_service import _close_redis
 
         await _close_redis()
+        # v6.0: 关闭数据库连接池
+        from services.db_service import close_all
+
+        await close_all()
         logger.info("gaokao-analyzer shutdown complete")
 
     return lifespan

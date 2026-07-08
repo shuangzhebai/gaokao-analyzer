@@ -61,6 +61,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# v6.0: orjson 加速 JSON 序列化（~5x 快于标准 json.dumps）
+try:
+    import orjson as _orjson
+
+    from fastapi.responses import JSONResponse as _BaseJSONResponse
+
+    class _FastJSONResponse(_BaseJSONResponse):
+        """使用 orjson 的 JSON 响应，速度 5x 于标准 json.dumps。"""
+
+        media_type = "application/json"
+
+        def render(self, content: Any) -> bytes:
+            return _orjson.dumps(content, default=str)
+
+    app.default_response_class = _FastJSONResponse
+except ImportError:
+    pass
+
 # 异常处理器（R-2：全局异常仅返回通用错误，不泄露内部路径/SQL）
 app.add_exception_handler(Exception, global_exception_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
@@ -158,6 +176,10 @@ async def add_security_headers(request: Request, call_next: Any) -> Any:
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     return response
+
+
+# ============ Gzip 压缩中间件（v6.0 性能优化 — 移至 Nginx 层处理更高效，此处跳过） ============
+# FastAPI 内置 gzip 支持通过 uvicorn/server 配置，此处不重复实现。
 
 
 # ============ 请求耗时 + 速率限制头中间件（v6.0 可观测性） ============

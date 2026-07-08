@@ -18,3 +18,5 @@ redis>=5.0
 celery>=5.3
 numba>=0.59
 meilisearch>=0.30
+asyncpg>=0.29.0
+orjson>=3.10.0
