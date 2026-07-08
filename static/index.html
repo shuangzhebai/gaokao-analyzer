@@ -21,9 +21,8 @@ if ('serviceWorker' in navigator) {
     default-src 'self';
     script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline';
     style-src 'self' 'unsafe-inline';
-    connect-src 'self';
-    img-src 'self' data:;
     connect-src 'self' http://localhost:*;
+    img-src 'self' data:;
     font-src 'self' data:;
 ">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"
@@ -910,12 +909,12 @@ html { scroll-behavior: smooth; }
   </div>
   <div class="nav-search">
     <span class="search-icon">&#128269;</span>
-    <input type="text" id="globalSearch" placeholder="搜索试卷、题目、知识点..." autocomplete="off">
-    <div class="suggestions" id="searchSuggestions"></div>
+    <input type="text" id="globalSearch" placeholder="搜索试卷、题目、知识点..." autocomplete="off" aria-label="全局搜索" aria-controls="searchSuggestions" aria-autocomplete="list">
+    <div class="suggestions" id="searchSuggestions" role="listbox" aria-label="搜索建议"></div>
   </div>
   <div class="nav-actions">
-    <button class="nav-btn secondary" onclick="switchPage('docs')">&#128214; 文件库</button>
-    <button class="nav-btn secondary" onclick="switchPage('collect')">&#11015; 采集</button>
+    <button class="nav-btn secondary" onclick="switchPage('docs')" aria-label="官方文件库">&#128214; 文件库</button>
+    <button class="nav-btn secondary" onclick="switchPage('collect')" aria-label="数据采集">&#11015; 采集</button>
   </div>
 </nav>
 
@@ -925,19 +924,19 @@ html { scroll-behavior: smooth; }
   <aside class="sidebar">
     <div class="sidebar-section">
       <div class="sidebar-title">导航</div>
-      <div class="sidebar-item active" onclick="switchPage('dashboard')">
+      <div class="sidebar-item active" onclick="switchPage('dashboard')" tabindex="0" role="button" aria-label="仪表盘">
         <span>&#9733;</span> 仪表盘
       </div>
-      <div class="sidebar-item" onclick="switchPage('papers')">
+      <div class="sidebar-item" onclick="switchPage('papers')" tabindex="0" role="button" aria-label="试卷库">
         <span>&#128196;</span> 试卷库
       </div>
-      <div class="sidebar-item" onclick="switchPage('collect')">
+      <div class="sidebar-item" onclick="switchPage('collect')" tabindex="0" role="button" aria-label="数据采集">
         <span>&#11015;</span> 采集站
       </div>
-      <div class="sidebar-item" onclick="switchPage('docs')">
+      <div class="sidebar-item" onclick="switchPage('docs')" tabindex="0" role="button" aria-label="官方文件库">
         <span>&#128214;</span> 官方文件库
       </div>
-      <div class="sidebar-item" onclick="switchPage('audit')">
+      <div class="sidebar-item" onclick="switchPage('audit')" tabindex="0" role="button" aria-label="真实性审核">
         <span>&#9989;</span> 真实性审核
       </div>
     </div>
@@ -966,7 +965,7 @@ html { scroll-behavior: smooth; }
       </div>
       <div class="filter-bar" id="filterBar">
         <input type="text" class="filter-select" id="filterKeyword" placeholder="搜索试卷标题/地区/学校..." style="width:240px;padding-left:14px;padding-right:14px" oninput="debounceSearch()">
-        <select class="filter-select" id="filterSubject" onchange="searchPapers()">
+        <select class="filter-select" id="filterSubject" onchange="searchPapers()" aria-label="筛选科目">
           <option value="">全部科目</option>
         </select>
         <select class="filter-select" id="filterType" onchange="searchPapers()">
@@ -1006,8 +1005,8 @@ html { scroll-behavior: smooth; }
       <div class="collect-panel">
         <div class="collect-form">
           <div class="form-group">
-            <label>年份</label>
-            <input type="number" id="collectYear" value="2026" min="2020" max="2030">
+              <label>年份</label>
+            <input type="number" id="collectYear" value="2026" min="2020" max="2030" oninput="validateCollectForm()">
           </div>
           <div class="form-group">
             <label>科目</label>
@@ -1017,9 +1016,9 @@ html { scroll-behavior: smooth; }
           </div>
           <div class="form-group">
             <label>关键词</label>
-            <input type="text" id="collectKeyword" placeholder="如：深圳二模">
+            <input type="text" id="collectKeyword" placeholder="如：深圳二模" oninput="validateCollectForm()">
           </div>
-          <button class="nav-btn primary" onclick="startCollect(this)">&#9654; 开始采集</button>
+          <button class="nav-btn primary" id="collectBtn" onclick="startCollect(this)">&#9654; 开始采集</button>
         </div>
       </div>
       <div class="section-header">
@@ -1065,26 +1064,26 @@ html { scroll-behavior: smooth; }
 
 <!-- 底部 Tab 导航（移动端） -->
 <div class="bottom-nav">
-  <button class="tab-item active" onclick="switchPage('dashboard')">
+  <button class="tab-item active" onclick="switchPage('dashboard')" aria-label="仪表盘">
     <span class="tab-icon">&#9733;</span>
     <span class="tab-label">仪表盘</span>
   </button>
-  <button class="tab-item" onclick="switchPage('papers')">
+  <button class="tab-item" onclick="switchPage('papers')" aria-label="试卷">
     <span class="tab-icon">&#128196;</span>
     <span class="tab-label">试卷</span>
   </button>
-  <button class="tab-item" onclick="document.getElementById('globalSearch').focus();switchPage('papers')">
+  <button class="tab-item" onclick="document.getElementById('globalSearch').focus();switchPage('papers')" aria-label="搜索">
     <span class="tab-icon">&#128269;</span>
     <span class="tab-label">搜索</span>
   </button>
-  <button class="tab-item" onclick="switchPage('audit')">
+  <button class="tab-item" onclick="switchPage('audit')" aria-label="设置">
     <span class="tab-icon">&#9881;</span>
     <span class="tab-label">设置</span>
   </button>
 </div>
 
 <!-- Toast 容器 -->
-<div class="toast-container" id="toastContainer"></div>
+<div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
 
 <script>
 // ===== 全局状态 =====
@@ -1094,8 +1093,43 @@ let currentSubject = '';
 const PAGE_SIZE = 20;
 // 全局 Chart 实例引用（用于 renderCharts 销毁防泄漏）
 let distChart, kpChart;
-// 考试标签（硬编码默认值，可由 loadExamTags 覆写）
+// 考试标签（硬编码默认值，可由 init 覆写）
 let examTags = ["一模","二模","三模","省质检","联考","月考","适应性考试","省统考"];
+
+// ===== 全局未捕获错误处理 =====
+window.addEventListener('unhandledrejection', function(e) {
+  console.error('未捕获的 Promise 异常:', e.reason);
+  showToast('网络或系统异常，请稍后重试', 'error');
+});
+window.addEventListener('error', function(e) {
+  console.error('运行时错误:', e.error || e.message);
+  showToast('页面发生异常', 'error');
+});
+
+// ===== HTML 转义工具（防 XSS） =====
+function escapeHtml(str) {
+  if (str == null) return '';
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(String(str)));
+  return div.innerHTML;
+}
+
+function safeUrl(url) {
+  if (!url) return '#';
+  try {
+    const u = new URL(url, window.location.origin);
+    // 仅允许 http/https 协议
+    if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+  } catch (e) { /* 无效 URL，使用 # */ }
+  return '#';
+}
+
+function safeParseKP(jsonStr) {
+  try {
+    const arr = JSON.parse(jsonStr);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
 
 // ===== API 工具 =====
 async function api(url, opts = {}) {
@@ -1137,7 +1171,7 @@ async function deletePaper(id, title) {
     return;
   }
   try {
-    await api(`/api/v1/v1/papers/${id}`, {method: 'DELETE'});
+    await api(`/api/v1/papers/${id}`, {method: 'DELETE'});
     showToast(`已删除「${title}」`, 'success');
     // 刷新当前页面
     if (currentPage === 'detail') switchPage('papers');
@@ -1170,6 +1204,14 @@ function switchPage(page, data) {
   else if (page === 'collect') loadCollectStatus();
   else if (page === 'docs') loadDocs();
   else if (page === 'audit') loadAuditPage();
+
+  // 聚焦内容区以辅助键盘导航
+  const contentEl = document.querySelector('.content');
+  if (contentEl && !contentEl.contains(document.activeElement)) {
+    const firstHeading = contentEl.querySelector('.section-title, h1, h2');
+    if (firstHeading) firstHeading.setAttribute('tabindex', '-1');
+    if (firstHeading) firstHeading.focus({ preventScroll: true });
+  }
 }
 
 // ===== 搜索 =====
@@ -1216,14 +1258,24 @@ async function fetchSuggestions(q) {
     const data = await api(`/api/v1/search/suggest?q=${encodeURIComponent(q)}`);
     const box = document.getElementById('searchSuggestions');
     if (data.suggestions && data.suggestions.length) {
-      box.innerHTML = data.suggestions.map(s =>
-        `<div class="sug-item" onclick="document.getElementById('globalSearch').value='${s.replace(/'/g,"\\'")}';document.getElementById('filterKeyword').value='${s.replace(/'/g,"\\'")}';document.getElementById('searchSuggestions').classList.remove('show');searchPage=1;switchPage('papers')">${s}</div>`
-      ).join('');
+      box.innerHTML = data.suggestions.map(s => {
+        const safe = escapeHtml(s);
+        const attrSafe = s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        return `<div class="sug-item" role="option" tabindex="0" onclick="selectSuggestion('${attrSafe}')" onkeydown="if(event.key==='Enter')selectSuggestion('${attrSafe}')">${safe}</div>`;
+      }).join('');
       box.classList.add('show');
     } else {
       box.classList.remove('show');
     }
   } catch (e) { showToast("搜索建议加载失败", "error"); }
+}
+
+function selectSuggestion(val) {
+  document.getElementById('globalSearch').value = val;
+  document.getElementById('filterKeyword').value = val;
+  document.getElementById('searchSuggestions').classList.remove('show');
+  searchPage = 1;
+  switchPage('papers');
 }
 
 async function searchPapers() {
@@ -1299,8 +1351,9 @@ function renderPaperCard(p) {
   const analysisBadge = p.analysis_status === 'simulated' ? '<span class="badge purple">已分析</span>' :
                         p.analysis_status === 'irt_estimated' ? '<span class="badge orange">IRT</span>' : '';
 
-  let titleHtml = p.title || '';
+  let titleHtml = escapeHtml(p.title || '');
   if (p.snippet && p.snippet.includes('<em>')) {
+    // 后端搜索高亮 snippet 已经过安全处理，仅允许 <em> 标签
     titleHtml = p.snippet;
   }
 
@@ -1330,12 +1383,12 @@ function renderPagination(total, page) {
   const el = document.getElementById('pagination');
   if (pages <= 1) { el.innerHTML = ''; return; }
   let html = '';
-  html += `<button class="page-btn" ${page<=1?'disabled':''} onclick="searchPage=${page-1};searchPapers()">&laquo;</button>`;
+  html += `<button class="page-btn" ${page<=1?'disabled':''} onclick="searchPage=${page-1};searchPapers()" aria-label="上一页">&laquo;</button>`;
   const start = Math.max(1, page-2), end = Math.min(pages, page+2);
   for (let i=start;i<=end;i++) {
-    html += `<button class="page-btn ${i===page?'active':''}" onclick="searchPage=${i};searchPapers()">${i}</button>`;
+    html += `<button class="page-btn ${i===page?'active':''}" onclick="searchPage=${i};searchPapers()" aria-label="第${i}页" ${i===page?'aria-current="page"':''}>${i}</button>`;
   }
-  html += `<button class="page-btn" ${page>=pages?'disabled':''} onclick="searchPage=${page+1};searchPapers()">&raquo;</button>`;
+  html += `<button class="page-btn" ${page>=pages?'disabled':''} onclick="searchPage=${page+1};searchPapers()" aria-label="下一页">&raquo;</button>`;
   el.innerHTML = html;
 }
 
@@ -1428,12 +1481,12 @@ async function loadDetail(paperId) {
         </div>
         ${regionHtml}
         <div style="display:flex;gap:10px;margin-top:16px">
-          <button class="nav-btn primary" onclick="runIRT(${p.id}, this)" ${p.analysis_status!=='pending'&&p.analysis_status!=='parsed'?'disabled':''}>IRT 分析</button>
-          <button class="nav-btn primary" onclick="runSimulate(${p.id}, this)" ${p.analysis_status!=='irt_estimated'?'disabled':''}>成绩模拟</button>
-          <button class="nav-btn secondary" onclick="runCurriculum(${p.id}, this)">课标分析</button>
-          <button class="nav-btn secondary" onclick="runQuality(${p.id}, this)">质量评估</button>
-          <button class="nav-btn primary" onclick="runPaperAnalysis(${p.id}, this)">&#128202; 质量分析报告</button>
-          <button class="nav-btn secondary" onclick="auditOnePaper(${p.id}, this)">真实性审核</button>
+          <button class="nav-btn primary" onclick="runIRT(${p.id}, this)" ${p.analysis_status!=='pending'&&p.analysis_status!=='parsed'?'disabled':''} aria-label="IRT 分析">IRT 分析</button>
+          <button class="nav-btn primary" onclick="runSimulate(${p.id}, this)" ${p.analysis_status!=='irt_estimated'?'disabled':''} aria-label="成绩模拟">成绩模拟</button>
+          <button class="nav-btn secondary" onclick="runCurriculum(${p.id}, this)" aria-label="课标分析">课标分析</button>
+          <button class="nav-btn secondary" onclick="runQuality(${p.id}, this)" aria-label="质量评估">质量评估</button>
+          <button class="nav-btn primary" onclick="runPaperAnalysis(${p.id}, this)" aria-label="质量分析报告">&#128202; 质量分析报告</button>
+          <button class="nav-btn secondary" onclick="auditOnePaper(${p.id}, this)" aria-label="真实性审核">真实性审核</button>
         </div>
       </div>
       <div class="section-header"><div class="section-title">题目列表 (${data.questions.length}题)</div></div>
@@ -1448,7 +1501,7 @@ async function loadDetail(paperId) {
               ${q.is_quality ? '<span class="badge green">优质题</span>' : ''}
             </div>
             <div class="q-content">${q.content || '（题目内容待录入）'}</div>
-            ${q.knowledge_points ? `<div class="q-kp">${JSON.parse(q.knowledge_points).map(k=>`<span class="kp-tag">${k}</span>`).join('')}</div>` : ''}
+            ${q.knowledge_points ? `<div class="q-kp">${safeParseKP(q.knowledge_points).map(k=>`<span class="kp-tag">${escapeHtml(k)}</span>`).join('')}</div>` : ''}
             ${q.answer ? `<div style="margin-top:10px;font-size:13px;color:var(--apple-green)"><b>答案：</b>${q.answer}</div>` : ''}
           </div>
         `).join('')}
@@ -1589,10 +1642,36 @@ async function auditOnePaper(paperId, btn) {
 }
 
 // ===== 采集 =====
+// 采集表单实时校验
+function validateCollectForm() {
+  const year = document.getElementById('collectYear').value;
+  const keyword = document.getElementById('collectKeyword').value.trim();
+  const btn = document.getElementById('collectBtn');
+  if (!year || year < 2014 || year > 2035 || !keyword) {
+    btn.style.opacity = '0.5';
+    btn.title = keyword ? (year >= 2014 && year <= 2035 ? '' : '年份超出范围') : '请输入关键词';
+  } else {
+    btn.style.opacity = '1';
+    btn.title = '';
+  }
+}
+
 async function startCollect(btn) {
   const year = document.getElementById('collectYear').value;
   const subject = document.getElementById('collectSubject').value;
   const keyword = document.getElementById('collectKeyword').value;
+
+  // 表单校验
+  if (!year || year < 2014 || year > 2035) {
+    showToast('请填写有效的年份（2014-2035）', 'error');
+    document.getElementById('collectYear').focus();
+    return;
+  }
+  if (!keyword.trim()) {
+    showToast('请输入关键词', 'error');
+    document.getElementById('collectKeyword').focus();
+    return;
+  }
 
   let params = new URLSearchParams({year});
   if (subject) params.set('subjects', subject);
@@ -1686,7 +1765,7 @@ async function loadDocs() {
               <span class="badge ${d.priority==='S'?'green':'gray'}">${d.priority}级</span>
             </div>
             ${d.summary ? `<div style="margin-top:8px;font-size:13px;color:var(--text-2)">${d.summary}</div>` : ''}
-            ${d.source_url ? `<a href="${d.source_url}" target="_blank" style="font-size:12px;color:var(--apple-blue);margin-top:4px;display:inline-block">查看原文 &rarr;</a>` : ''}
+            ${d.source_url ? `<a href="${safeUrl(d.source_url)}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:var(--apple-blue);margin-top:4px;display:inline-block">查看原文 &rarr;</a>` : ''}
           </div>
         </div>
       `).join('');
@@ -1964,58 +2043,42 @@ function renderAnalysisCharts(report) {
 }
 
 // ===== 初始化 =====
-// 从 API 加载远端考试标签，回退硬编码
-async function loadExamTags() {
-    try {
-        const resp = await fetch('/api/v1/filters');
-        const data = await resp.json();
-        if (data.exam_tags && data.exam_tags.length > 0) {
-            examTags = data.exam_tags;
-        }
-    } catch (e) {
-        // 保持硬编码值
+  // 一次性加载所有筛选数据，避免重复请求
+  try {
+    const filters = await api('/api/v1/filters');
+    // 考试标签
+    if (filters.exam_tags && filters.exam_tags.length > 0) {
+      examTags = filters.exam_tags;
     }
-}
-
-async function init() {
-  // 优先从 API 加载考试标签（异步，不阻塞后续初始化）
-  loadExamTags().then(() => {
-    // API 返回后重填考试标签下拉
     const tagSel = document.getElementById('filterExamTag');
     tagSel.innerHTML = '<option value="">全部考试</option>';
     examTags.forEach(t => {
-      tagSel.innerHTML += `<option value="${t}">${t}</option>`;
+      tagSel.innerHTML += `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`;
     });
-  }).catch(() => {/* 保持硬编码值已就绪 */});
 
-  try {
-    const filters = await api('/api/v1/filters');
     const subjectSel = document.getElementById('filterSubject');
     const collectSubj = document.getElementById('collectSubject');
     Object.entries(filters.paper_types || {}).forEach(([k,v]) => {
-      document.getElementById('filterType').innerHTML += `<option value="${k}">${v}</option>`;
+      document.getElementById('filterType').innerHTML += `<option value="${escapeHtml(k)}">${escapeHtml(v)}</option>`;
     });
     (filters.years || []).forEach(y => {
-      document.getElementById('filterYear').innerHTML += `<option value="${y}">${y}年</option>`;
+      document.getElementById('filterYear').innerHTML += `<option value="${escapeHtml(String(y))}">${y}年</option>`;
     });
 
     // 省份筛选
     (filters.provinces || []).forEach(p => {
-      document.getElementById('filterProvince').innerHTML += `<option value="${p}">${p}</option>`;
-    });
-
-    // 考试标签筛选（先用硬编码填充，loadExamTags 异步覆写）
-    examTags.forEach(t => {
-      document.getElementById('filterExamTag').innerHTML += `<option value="${t}">${t}</option>`;
+      document.getElementById('filterProvince').innerHTML += `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`;
     });
 
     const sidebar = document.getElementById('subjectSidebar');
     (filters.subjects || []).forEach(s => {
-      subjectSel.innerHTML += `<option value="${s.id}">${s.name}</option>`;
-      collectSubj.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+      const safeId = escapeHtml(String(s.id));
+      const safeName = escapeHtml(s.name);
+      subjectSel.innerHTML += `<option value="${safeId}">${safeName}</option>`;
+      collectSubj.innerHTML += `<option value="${safeId}">${safeName}</option>`;
       sidebar.innerHTML += `
-        <div class="sidebar-item" onclick="currentSubject='${s.id}';switchPage('papers')">
-          <div class="dot" style="background:var(--apple-blue)"></div>${s.name}
+        <div class="sidebar-item" onclick="currentSubject='${safeId}';switchPage('papers')" tabindex="0" role="button">
+          <div class="dot" style="background:var(--apple-blue)"></div>${safeName}
         </div>
       `;
     });
@@ -2025,7 +2088,7 @@ async function init() {
       const cats = await api('/api/v1/official-docs/categories');
       const catSel = document.getElementById('docCategory');
       (cats || []).forEach(c => {
-        catSel.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+        catSel.innerHTML += `<option value="${escapeHtml(String(c.id))}">${escapeHtml(c.name)}</option>`;
       });
     } catch (e) { console.error("官方文件分类加载失败:", e); }
   } catch (e) { console.error("初始化失败:", e); }
