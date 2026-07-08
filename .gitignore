@@ -1,41 +1,36 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
-*.egg
 
+# IDE
+# Python
+# 临时文件
 # 数据库文件（包含本地数据，不应上传）
+# 数据目录（如有敏感数据）
+# 虚拟环境
+# 项目临时文件
 *.db
 *.db-journal
 *.db-wal
-
-# 虚拟环境
-venv/
-env/
-.venv/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# 临时文件
+*.egg
+*.egg-info/
 *.log
+*.py[cod]
+*.pyc
+*.pyo
+*.swo
+*.swp
 *.tmp
+*~
 .DS_Store
-Thumbs.db
-
-# 项目临时文件
+.idea/
+.venv/
+.vscode/
 DELIVERY.md
-verify_v5.ipynb
+Thumbs.db
 __pycache__/
-
-# 数据目录（如有敏感数据）
+build/
 data/
+dist/
+docs/\n!docs/system_design.md\n!docs/archived/
+env/
+venv/
+verify_v5.ipynb
 website/build
