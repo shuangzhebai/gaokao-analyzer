@@ -1,0 +1,84 @@
+# gaokao-analyzer Helm Chart values
+# 部署: helm install gaokao-analyzer ./deploy/charts/gaokao-analyzer
+
+replicaCount: 2
+
+image:
+  repository: shuangzhebai/gaokao-analyzer
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 8000
+
+ingress:
+  enabled: true
+  className: nginx
+  host: analyzer.example.com
+  tls:
+    enabled: true
+    secretName: gaokao-analyzer-tls
+
+resources:
+  limits:
+    cpu: "2"
+    memory: 2Gi
+  requests:
+    cpu: "500m"
+    memory: 512Mi
+
+env:
+  GAOKAO_ENV: "prod"
+  CORS_ORIGINS: "https://analyzer.example.com"
+  JWT_SECRET: "change-me-in-production"
+  REDIS_URL: "redis://redis-master:6379/0"
+  MEILISEARCH_URL: "http://meilisearch:7700"
+  MEILISEARCH_API_KEY: ""
+  DATABASE_URL: "postgresql://gaokao:gaokao@postgresql:5432/gaokao"
+  GAOKAO_DB: "postgresql"
+
+postgresql:
+  enabled: true
+  auth:
+    database: gaokao
+    username: gaokao
+    password: gaokao
+  primary:
+    persistence:
+      size: 10Gi
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      size: 5Gi
+
+meilisearch:
+  enabled: true
+  env:
+    MEILI_MASTER_KEY: ""
+    MEILI_NO_ANALYTICS: "true"
+  persistence:
+    size: 5Gi
+
+persistence:
+  data:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+
+celery:
+  enabled: true
+  replicaCount: 1
+  concurrency: 2
+  resources:
+    limits:
+      cpu: "1"
+      memory: 1Gi
+    requests:
+      cpu: "200m"
+      memory: 256Mi

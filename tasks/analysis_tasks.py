@@ -29,6 +29,22 @@ try:
                 repo_analysis = AnalysisRepository()
                 service = PaperService(repo_paper, repo_question, repo_analysis)
                 result = await service.full_analyze(db, paper_id)
+                # 触发 webhook 通知
+                try:
+                    import aiosqlite as _aiosqlite_wh
+                    from config import DB_PATH as _DB_PATH_WH
+                    _db_wh = await _aiosqlite_wh.connect(_DB_PATH_WH)
+                    _db_wh.row_factory = _aiosqlite_wh.Row
+                    try:
+                        from routes.webhooks import trigger_webhooks
+                        event = "task.completed" if result.get("status") == "success" else "task.failed"
+                        await trigger_webhooks(_db_wh, event, {"task_name": "analyze_paper", "paper_id": paper_id, "result": result})
+                    except Exception:
+                        pass
+                    finally:
+                        await _db_wh.close()
+                except Exception:
+                    pass
                 return {"status": "success", "paper_id": paper_id, "result": result}
             except Exception as e:
                 logger.exception("analyze_paper(%s) failed", paper_id)
@@ -59,6 +75,23 @@ try:
                 repo_analysis = AnalysisRepository()
                 service = PaperService(repo_paper, repo_question, repo_analysis)
                 result = await service.run_simulation(db, paper_id, n_students)
+                # 触发 webhook 通知
+                try:
+                    import aiosqlite as _aiosqlite_wh
+                    from config import DB_PATH as _DB_PATH_WH
+                    _db_wh = await _aiosqlite_wh.connect(_DB_PATH_WH)
+                    _db_wh.row_factory = _aiosqlite_wh.Row
+                    try:
+                        from routes.webhooks import trigger_webhooks
+                        event = "task.completed"
+                        payload = {"task_name": "simulate_paper", "paper_id": paper_id, "n_students": n_students, "result": result}
+                        await trigger_webhooks(_db_wh, event, payload)
+                    except Exception:
+                        pass
+                    finally:
+                        await _db_wh.close()
+                except Exception:
+                    pass
                 return {"status": "success", "paper_id": paper_id, "result": result}
             except Exception as e:
                 logger.exception("simulate_paper(%s) failed", paper_id)
@@ -89,6 +122,23 @@ try:
                 result = await service.collect_papers(
                     db, sources or [], repo_paper, repo_question
                 )
+                # 触发 webhook 通知
+                try:
+                    import aiosqlite as _aiosqlite_wh
+                    from config import DB_PATH as _DB_PATH_WH
+                    _db_wh = await _aiosqlite_wh.connect(_DB_PATH_WH)
+                    _db_wh.row_factory = _aiosqlite_wh.Row
+                    try:
+                        from routes.webhooks import trigger_webhooks
+                        event = "task.completed"
+                        payload = {"task_name": "collect_papers", "sources": sources, "result": result}
+                        await trigger_webhooks(_db_wh, event, payload)
+                    except Exception:
+                        pass
+                    finally:
+                        await _db_wh.close()
+                except Exception:
+                    pass
                 return {"status": "success", "result": result}
             except Exception as e:
                 logger.exception("collect_papers failed")

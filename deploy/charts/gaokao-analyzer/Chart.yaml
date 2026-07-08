@@ -1,0 +1,18 @@
+apiVersion: v2
+name: gaokao-analyzer
+description: 高考模拟卷智能分析系统 — IRT 3PL · 蒙特卡洛模拟 · 6 维度质量分析
+type: application
+version: 6.0.0
+appVersion: "6.0"
+keywords:
+  - gaokao
+  - exam-analysis
+  - irt
+  - monte-carlo
+  - education
+home: https://github.com/shuangzhebai/gaokao-analyzer
+sources:
+  - https://github.com/shuangzhebai/gaokao-analyzer
+maintainers:
+  - name: shuangzhebai
+    url: https://github.com/shuangzhebai

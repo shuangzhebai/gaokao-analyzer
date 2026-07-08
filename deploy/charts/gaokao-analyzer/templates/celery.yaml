@@ -1,0 +1,33 @@
+{{- if .Values.celery.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gaokao-analyzer.fullname" . }}-celery
+spec:
+  replicas: {{ .Values.celery.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gaokao-analyzer-celery
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gaokao-analyzer-celery
+    spec:
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command: ["celery", "-A", "celery_app", "worker", "--loglevel=info", "--concurrency={{ .Values.celery.concurrency }}"]
+          env:
+            - name: REDIS_URL
+              value: "{{ .Values.env.REDIS_URL }}"
+            - name: CELERY_BROKER_URL
+              value: "{{ .Values.env.REDIS_URL }}"
+            - name: CELERY_RESULT_BACKEND
+              value: "{{ .Values.env.REDIS_URL }}"
+            - name: DATABASE_URL
+              value: "{{ .Values.env.DATABASE_URL }}"
+            - name: GAOKAO_DB
+              value: "{{ .Values.env.GAOKAO_DB }}"
+          resources:
+            {{- toYaml .Values.celery.resources | nindent 12 }}
+{{- end }}

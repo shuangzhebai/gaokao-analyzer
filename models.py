@@ -14,7 +14,7 @@ logger = logging.getLogger("gaokao")
 # ============ 版本化迁移（T01：防清空数据） ============
 
 # 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
-CURRENT_SCHEMA_VERSION = 5
+CURRENT_SCHEMA_VERSION = 6
 
 
 async def _ensure_schema_migrations(db: Any) -> None:
@@ -164,6 +164,19 @@ async def _migrate_to_v5(db: Any) -> None:
         pass
 
 
+async def _migrate_to_v6(db: Any) -> None:
+    """阶段六迁移 v6：添加 webhooks 表。"""
+    await db.execute("""CREATE TABLE IF NOT EXISTS webhooks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        url TEXT NOT NULL,
+        events TEXT NOT NULL DEFAULT 'task.completed',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )""")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_webhooks_user ON webhooks(user_id)")
+
+
 # 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
 MIGRATIONS = {
     1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
@@ -171,6 +184,7 @@ MIGRATIONS = {
     3: ("phase3: 新增 audit_log 操作审计日志表", _migrate_to_v3),
     4: ("phase4: 新增 users/roles/user_roles 用户与角色表", _migrate_to_v4),
     5: ("phase5: 多租户 tenant_id 字段（papers + users）", _migrate_to_v5),
+    6: ("phase6: 新增 webhooks 表", _migrate_to_v6),
 }
 
 
