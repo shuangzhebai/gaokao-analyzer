@@ -4,8 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>高考分析中心 v5</title>
+<!-- P2-01 PWA 支持 -->
+<link rel="manifest" href="/static/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <!-- P1-04 i18n 国际化：es5 兼容，无需构建工具 -->
 <script src="/static/i18n.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/static/sw.js').catch(function(err) {
+        console.log('SW registration failed:', err);
+    });
+}
+</script>
 <meta http-equiv="Content-Security-Policy" content="
     default-src 'self';
     script-src 'self' https://cdn.jsdelivr.net https://unpkg.com 'unsafe-inline';
