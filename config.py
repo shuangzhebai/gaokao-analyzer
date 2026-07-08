@@ -609,6 +609,10 @@ def get_question_type_preset(subject_id: str) -> dict[str, float]:
 REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CACHE_TTL: int = int(os.environ.get("CACHE_TTL", "300"))  # 默认 5 分钟
 
+# Celery 异步任务配置（P1-02，无 Celery 时降级为同步执行）
+CELERY_BROKER_URL: str = os.environ.get("CELERY_BROKER_URL", "redis://localhost:6379/0")
+CELERY_RESULT_BACKEND: str = os.environ.get("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
+
 
 # 确保目录存在
 for d in [DATA_DIR, DOWNLOAD_DIR]:

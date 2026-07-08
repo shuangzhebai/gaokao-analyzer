@@ -18,12 +18,15 @@ from config import VERSION
 from deps import get_auto_scraper, get_audit_service, repo_user
 from errors import global_exception_handler, http_exception_handler
 from lifespan import create_lifespan
+
+# P1-02: 导入 celery_app 即触发 Celery 初始化
+import celery_app  # noqa: F401
 from services.auth_service import AuthService
 # 导入教育站点适配器（导入即触发 AdapterRegistry.register，scraper 构造时可见）
 import edu_source_adapters  # noqa: F401 — 注册 xueke_wang / zujuan_wang 适配器
 
 from models import get_db
-from routes import analysis, audit, auth, dedup, official_docs, papers, scrape, search
+from routes import analysis, audit, auth, dedup, official_docs, papers, scrape, search, tasks
 
 # API 速率限制（slowapi）：若运行环境未安装 slowapi，则优雅降级（不启用限速）。
 try:
@@ -256,3 +259,4 @@ app.include_router(audit.router)
 app.include_router(official_docs.router)
 app.include_router(analysis.router)
 app.include_router(auth.router)
+app.include_router(tasks.router)
