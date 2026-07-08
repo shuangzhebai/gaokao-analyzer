@@ -4,10 +4,32 @@
 
 [![Python](https://img.shields.io/badge/Python-3.13%2B-blue?logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com)
-[![Tests](https://img.shields.io/badge/Tests-179%20passed-success?logo=pytest)](https://github.com/shuangzhebai/gaokao-analyzer/actions)
+[![Tests](https://img.shields.io/badge/Tests-207%20passed-success?logo=pytest)](https://github.com/shuangzhebai/gaokao-analyzer/actions)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/shuangzhebai/gaokao-analyzer?style=social)](https://github.com/shuangzhebai/gaokao-analyzer)
 [![Docusaurus](https://img.shields.io/badge/Docs-Docusaurus-3ECC5F?logo=docusaurus)](https://shuangzhebai.github.io/gaokao-analyzer)
+
+---
+
+## 🚀 小白用户看这里（3 步完成）
+
+> **操作步骤：下载 → 双击 → 直接用！**
+
+### 方法一：Docker 一键启动（推荐，最简单）
+
+1. 安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+2. 下载本项目，双击 **`Docker一键启动.bat`**
+3. 浏览器自动打开，直接点击"登录"按钮即可
+
+> 管理员账号已自动创建，**无需注册**，账号密码已自动填好
+
+### 方法二：Python 一键启动（无需 Docker）
+
+1. 安装 [Python 3.13+](https://www.python.org/downloads/)（安装时勾选 "Add Python to PATH"）
+2. 下载本项目，双击 **`一键启动.bat`**
+3. 浏览器自动打开，直接点击"登录"按钮即可
+
+> 首次启动会自动安装依赖（约 2-5 分钟），请耐心等待
 
 ---
 

@@ -104,6 +104,20 @@ def create_lifespan() -> Any:
             logger.warning("static/index.html 未找到，返回占位页")
             app.state.index_html = "<html><body>前端文件缺失</body></html>"
 
+        # 零配置模式：首次启动自动创建默认管理员账号
+        try:
+            from services.auth_service import AuthService
+            from repositories.user_repo import UserRepository
+
+            auth_svc = AuthService(UserRepository())
+            async for db in get_db():
+                existing = await db.execute_fetchone("SELECT COUNT(*) as cnt FROM users")
+                if existing and existing["cnt"] == 0:
+                    await auth_svc.register(db, "admin", "admin123", role="admin")
+                    logger.info("默认管理员已创建: admin / admin123")
+        except Exception as e:
+            logger.debug("默认管理员创建跳过: %s", e)
+
         logger.info("gaokao-analyzer startup complete - engines ready, index cached")
 
         # 运行时上下文集中化（批次二：T-C2）：构建不可变快照存入 app.state.ctx，

@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { TextField, Button, Typography, Box, Alert } from '@mui/material';
-import { useNavigate, Link } from 'react-router-dom';
+import { TextField, Button, Typography, Box, Alert, Paper } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -35,8 +35,19 @@ export default function LoginPage() {
       <Button fullWidth type="submit" variant="contained" disabled={loading} sx={{ mb: 1.5, bgcolor: '#00d4ff', '&:hover': { bgcolor: '#00b8e6' } }}>
         {loading ? '登录中...' : '登录'}
       </Button>
+      <Paper sx={{ bgcolor: 'rgba(0,212,255,0.06)', p: 1.5, mb: 1.5 }}>
+        <Typography variant="caption" sx={{ color: '#00d4ff', fontWeight: 600, display: 'block', mb: 0.5 }}>
+          首次使用？默认管理员账号已自动创建
+        </Typography>
+        <Typography variant="caption" sx={{ color: '#a0a0b0', display: 'block' }}>
+          账号: <strong style={{ color: '#e0e0e0' }}>admin</strong> / 密码: <strong style={{ color: '#e0e0e0' }}>admin123</strong>
+        </Typography>
+        <Typography variant="caption" sx={{ color: '#666', display: 'block', mt: 0.5 }}>
+          首次使用请直接点击"登录"按钮即可
+        </Typography>
+      </Paper>
       <Typography variant="body2" sx={{ textAlign: 'center', color: '#a0a0b0' }}>
-        没有账号？<Link to="/register" style={{ color: '#00d4ff' }}>注册</Link>
+        系统已自动创建管理员账号，直接点击登录即可使用
       </Typography>
     </Box>
   );
