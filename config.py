@@ -605,6 +605,11 @@ def get_question_type_preset(subject_id: str) -> dict[str, float]:
     return QUESTION_TYPE_PRESET.get(subject_id, QUESTION_TYPE_PRESET["math"])
 
 
+# Redis 缓存配置（P1-01，无 Redis 时自动降级为进程内 LRU）
+REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+CACHE_TTL: int = int(os.environ.get("CACHE_TTL", "300"))  # 默认 5 分钟
+
+
 # 确保目录存在
 for d in [DATA_DIR, DOWNLOAD_DIR]:
     os.makedirs(d, exist_ok=True)

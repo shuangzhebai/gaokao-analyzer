@@ -81,6 +81,13 @@ async def get_audit_service(request: Request) -> Any:
     return request.app.state.audit_service
 
 
+async def get_cache_service(request: Request) -> Any:
+    """P1-01: Redis 双级缓存服务。"""
+    from services.cache_service import get_cache
+
+    return get_cache()
+
+
 # ============ 原有引擎依赖注入（保持不变） ============
 
 def get_scraper_manager(request: Request) -> Any:

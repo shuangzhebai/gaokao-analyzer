@@ -12,7 +12,22 @@ services:
       GAOKAO_ENV: "dev"
       # 关闭 Python 输出缓冲，便于容器日志实时查看
       PYTHONUNBUFFERED: "1"
+      # Redis 连接（P1-01）
+      REDIS_URL: "redis://redis:6379/0"
     volumes:
       # 数据持久化：镜像内 DB 路径为 /app/data（与 config.DB_PATH=data/gaokao.db 一致）
       - ./data:/app/data
+    depends_on:
+      - redis
     restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

@@ -106,6 +106,11 @@ def create_lifespan() -> Any:
         # 供依赖注入 get_app_context 与路由统一读取。
         app.state.ctx = build_app_context(app)
 
+        # P1-01: Redis 双级缓存初始化（无 Redis 时自动降级）
+        from services.cache_service import init_cache
+
+        await init_cache()
+
         yield
 
         # ---------- 关闭 ----------
@@ -113,6 +118,10 @@ def create_lifespan() -> Any:
             await app.state.scraper_manager.close()
         if getattr(app.state, "auto_scraper", None):
             await app.state.auto_scraper.stop()
+        # P1-01: 关闭 Redis 连接
+        from services.cache_service import _close_redis
+
+        await _close_redis()
         logger.info("gaokao-analyzer shutdown complete")
 
     return lifespan
