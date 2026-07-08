@@ -24,7 +24,8 @@ router = APIRouter()
 
 # ===================== 端点 =====================
 
-@router.post("/api/papers/{paper_id}/analyze")
+@router.post("/api/papers/{paper_id}/analyze", include_in_schema=False)
+@router.post("/api/v1/papers/{paper_id}/analyze")
 async def analyze_paper_endpoint(
     paper_id: int,
     db: Connection = Depends(get_db),
@@ -35,7 +36,8 @@ async def analyze_paper_endpoint(
     return await service.analyze_paper(db, paper_id, analyzer)
 
 
-@router.post("/api/papers/analyze/batch")
+@router.post("/api/papers/analyze/batch", include_in_schema=False)
+@router.post("/api/v1/papers/analyze/batch")
 async def analyze_papers_batch_endpoint(
     paper_ids: List[int] = Body(..., embed=True),
     max_workers: Optional[int] = None,
@@ -79,7 +81,8 @@ async def analyze_papers_batch_endpoint(
     return {"count": len(results), "results": results}
 
 
-@router.get("/api/papers/{paper_id}/report")
+@router.get("/api/papers/{paper_id}/report", include_in_schema=False)
+@router.get("/api/v1/papers/{paper_id}/report")
 async def get_paper_report(
     paper_id: int,
     db: Connection = Depends(get_db),

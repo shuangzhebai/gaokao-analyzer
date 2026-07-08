@@ -13,7 +13,8 @@ logger = logging.getLogger("gaokao")
 router = APIRouter()
 
 
-@router.get("/api/search")
+@router.get("/api/search", include_in_schema=False)
+@router.get("/api/v1/search")
 async def search_papers(
     q: str = "",
     subject: Optional[str] = None,
@@ -37,7 +38,8 @@ async def search_papers(
     )
 
 
-@router.get("/api/search/suggest")
+@router.get("/api/search/suggest", include_in_schema=False)
+@router.get("/api/v1/search/suggest")
 async def search_suggest(
     q: str = Query(..., min_length=1),
     limit: int = Query(10, ge=1, le=20),
@@ -47,7 +49,8 @@ async def search_suggest(
     return {"query": q, "suggestions": suggestions}
 
 
-@router.get("/api/search/questions")
+@router.get("/api/search/questions", include_in_schema=False)
+@router.get("/api/v1/search/questions")
 async def search_questions(
     q: str = Query(..., min_length=1),
     subject: Optional[str] = None,

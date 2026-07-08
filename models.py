@@ -14,7 +14,7 @@ logger = logging.getLogger("gaokao")
 # ============ 版本化迁移（T01：防清空数据） ============
 
 # 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
-CURRENT_SCHEMA_VERSION = 3
+CURRENT_SCHEMA_VERSION = 4
 
 
 async def _ensure_schema_migrations(db: Any) -> None:
@@ -107,11 +107,51 @@ async def _migrate_to_v3(db: Any) -> None:
     await db.execute("CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at)")
 
 
+async def _migrate_to_v4(db: Any) -> None:
+    """阶段四迁移 v4：新增用户与角色表。"""
+    await db.execute(
+        """CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            email TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )"""
+    )
+    await db.execute(
+        """CREATE TABLE IF NOT EXISTS roles (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            priority INTEGER DEFAULT 0
+        )"""
+    )
+    await db.execute(
+        """INSERT OR IGNORE INTO roles (id, name, description, priority) VALUES
+            ('admin', '管理员', '系统管理员，拥有所有权限', 0),
+            ('teacher', '教师', '可以上传、分析、查看试卷', 1),
+            ('viewer', '查看者', '仅可查看和搜索', 2)"""
+    )
+    await db.execute(
+        """CREATE TABLE IF NOT EXISTS user_roles (
+            user_id INTEGER NOT NULL,
+            role_id TEXT NOT NULL,
+            assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, role_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+        )"""
+    )
+
+
 # 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
 MIGRATIONS = {
     1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
     2: ("phase2: 新增 paper_reports 报告表", _migrate_to_v2),
     3: ("phase3: 新增 audit_log 操作审计日志表", _migrate_to_v3),
+    4: ("phase4: 新增 users/roles/user_roles 用户与角色表", _migrate_to_v4),
 }
 
 
@@ -488,6 +528,38 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user);
 CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+
+-- v4: 用户与角色表
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    email TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    priority INTEGER DEFAULT 0
+);
+
+INSERT OR IGNORE INTO roles (id, name, description, priority) VALUES
+    ('admin', '管理员', '系统管理员，拥有所有权限', 0),
+    ('teacher', '教师', '可以上传、分析、查看试卷', 1),
+    ('viewer', '查看者', '仅可查看和搜索', 2);
+
+CREATE TABLE IF NOT EXISTS user_roles (
+    user_id INTEGER NOT NULL,
+    role_id TEXT NOT NULL,
+    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, role_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
 """
 
 

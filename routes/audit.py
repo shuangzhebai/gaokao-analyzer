@@ -24,19 +24,22 @@ router = APIRouter()
 
 # ============ 地区校验 API ============
 
-@router.get("/api/regions")
+@router.get("/api/regions", include_in_schema=False)
+@router.get("/api/v1/regions")
 async def get_regions() -> dict[str, Any]:
     """获取地区层级映射"""
     return REGION_HIERARCHY
 
 
-@router.get("/api/regions/validate")
+@router.get("/api/regions/validate", include_in_schema=False)
+@router.get("/api/v1/regions/validate")
 async def validate_region(province: str = "", city: str = "", title: str = "") -> dict[str, Any]:
     """校验地区信息"""
     return RegionValidator.validate_region(province=province, city=city, title=title)
 
 
-@router.post("/api/regions/batch-fix")
+@router.post("/api/regions/batch-fix", include_in_schema=False)
+@router.post("/api/v1/regions/batch-fix")
 async def batch_fix_regions(
     limit: int = 100,
     db: Connection = Depends(get_db),
@@ -48,7 +51,8 @@ async def batch_fix_regions(
 
 # ============ 真实性审核 API ============
 
-@router.post("/api/audit/paper/{paper_id}")
+@router.post("/api/audit/paper/{paper_id}", include_in_schema=False)
+@router.post("/api/v1/audit/paper/{paper_id}")
 async def audit_paper(paper_id: int) -> dict[str, Any]:
     result = await AuthVerifier.audit_paper(
         paper_id, deepseek_key=get_deepseek_key()
@@ -56,20 +60,23 @@ async def audit_paper(paper_id: int) -> dict[str, Any]:
     return result
 
 
-@router.post("/api/audit/batch")
+@router.post("/api/audit/batch", include_in_schema=False)
+@router.post("/api/v1/audit/batch")
 async def batch_audit(limit: int = 100, unverified_only: bool = True) -> dict[str, Any]:
     result = await AuthVerifier.batch_audit(limit=limit, unverified_only=unverified_only)
     return result
 
 
-@router.get("/api/audit/summary")
+@router.get("/api/audit/summary", include_in_schema=False)
+@router.get("/api/v1/audit/summary")
 async def audit_summary() -> dict[str, Any]:
     return await AuthVerifier.get_audit_summary()
 
 
 # ============ 交叉验证 API ============
 
-@router.post("/api/verify/paper")
+@router.post("/api/verify/paper", include_in_schema=False)
+@router.post("/api/v1/verify/paper")
 async def verify_paper_authenticity(
     title: str = Query(...),
     subject_id: str = Query(...),
@@ -85,6 +92,7 @@ async def verify_paper_authenticity(
 
 # ============ 校准数据 API ============
 
-@router.get("/api/calibration")
+@router.get("/api/calibration", include_in_schema=False)
+@router.get("/api/v1/calibration")
 async def get_calibration_data() -> dict[str, Any]:
     return CALIBRATION_DATA

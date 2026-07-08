@@ -11,7 +11,8 @@ from deps import get_official_docs
 router = APIRouter()
 
 
-@router.get("/api/official-docs")
+@router.get("/api/official-docs", include_in_schema=False)
+@router.get("/api/v1/official-docs")
 async def list_official_docs(
     keyword: str = "",
     category: str = "",
@@ -25,12 +26,14 @@ async def list_official_docs(
     )
 
 
-@router.get("/api/official-docs/categories")
+@router.get("/api/official-docs/categories", include_in_schema=False)
+@router.get("/api/v1/official-docs/categories")
 async def list_doc_categories(official_docs: Any = Depends(get_official_docs)) -> Any:
     return await official_docs.get_categories()
 
 
-@router.post("/api/official-docs/refresh")
+@router.post("/api/official-docs/refresh", include_in_schema=False)
+@router.post("/api/v1/official-docs/refresh")
 async def refresh_official_docs(official_docs: Any = Depends(get_official_docs)) -> Any:
     result = await official_docs.refresh_from_official_sources()
     return result

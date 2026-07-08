@@ -18,7 +18,8 @@ logger = logging.getLogger("gaokao")
 router = APIRouter()
 
 
-@router.get("/api/scrape/status")
+@router.get("/api/scrape/status", include_in_schema=False)
+@router.get("/api/v1/scrape/status")
 async def scrape_status(
     db: Connection = Depends(get_db),
     auto_scraper: Any = Depends(get_auto_scraper),
@@ -27,7 +28,8 @@ async def scrape_status(
     return await service.get_scrape_status(db, auto_scraper)
 
 
-@router.post("/api/scrape/collect")
+@router.post("/api/scrape/collect", include_in_schema=False)
+@router.post("/api/v1/scrape/collect")
 async def collect_papers(
     year: int = 2026,
     subjects: Optional[str] = None,
@@ -43,14 +45,16 @@ async def collect_papers(
     )
 
 
-@router.get("/api/auto-scraper/status")
+@router.get("/api/auto-scraper/status", include_in_schema=False)
+@router.get("/api/v1/auto-scraper/status")
 async def auto_scraper_status(auto_scraper: Any = Depends(get_auto_scraper)) -> Any:
     if not auto_scraper:
         return {"running": False, "error": "Auto-scraper not initialized"}
     return auto_scraper.get_status()
 
 
-@router.post("/api/auto-scraper/trigger")
+@router.post("/api/auto-scraper/trigger", include_in_schema=False)
+@router.post("/api/v1/auto-scraper/trigger")
 async def trigger_auto_scrape(
     background_tasks: BackgroundTasks,
     auto_scraper: Any = Depends(get_auto_scraper),

@@ -337,6 +337,11 @@ CALIBRATION_DATA = {
     },
 }
 
+# ===== JWT + RBAC 鉴权配置 (v5.1 T05) =====
+JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")  # 生产必须修改！
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "1440"))  # 24h
+
 # 拟合分析权重
 FIT_WEIGHTS = {
     "knowledge_coverage": 0.25,

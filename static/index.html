@@ -1123,7 +1123,7 @@ async function deletePaper(id, title) {
     return;
   }
   try {
-    await api(`/api/papers/${id}`, {method: 'DELETE'});
+    await api(`/api/v1/v1/papers/${id}`, {method: 'DELETE'});
     showToast(`已删除「${title}」`, 'success');
     // 刷新当前页面
     if (currentPage === 'detail') switchPage('papers');
@@ -1199,7 +1199,7 @@ function clearFilters() {
 
 async function fetchSuggestions(q) {
   try {
-    const data = await api(`/api/search/suggest?q=${encodeURIComponent(q)}`);
+    const data = await api(`/api/v1/search/suggest?q=${encodeURIComponent(q)}`);
     const box = document.getElementById('searchSuggestions');
     if (data.suggestions && data.suggestions.length) {
       box.innerHTML = data.suggestions.map(s =>
@@ -1242,7 +1242,7 @@ async function searchPapers() {
   list.innerHTML = '<div class="loading"><div class="spinner"></div>搜索中...</div>';
 
   try {
-    const data = await api(`/api/search?${params}`);
+    const data = await api(`/api/v1/search?${params}`);
     if (!data.data.length) {
       list.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128270;</div><div class="empty-text">没有找到相关试卷</div><div class="empty-hint">试试其他关键词或调整筛选条件</div></div>';
     } else {
@@ -1328,7 +1328,7 @@ function renderPagination(total, page) {
 // ===== 仪表盘 =====
 async function loadDashboard() {
   try {
-    const data = await api('/api/dashboard');
+    const data = await api('/api/v1/dashboard');
     const s = document.getElementById('statsRow');
     s.innerHTML = `
       <div class="stat-card blue">
@@ -1378,7 +1378,7 @@ async function loadDetail(paperId) {
   el.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
 
   try {
-    const data = await api(`/api/papers/${paperId}`);
+    const data = await api(`/api/v1/papers/${paperId}`);
     const p = data.paper;
     const typeLabels = {real:'高考真题',provincial:'省质检/省模拟',school:'名校联考',monthly:'月考/周考',special:'专项训练'};
     const priorityLabel = data.source_priority_label || '';
@@ -1528,7 +1528,7 @@ async function runIRT(paperId, btn) {
   if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始 IRT 参数估计...', 'info');
   try {
-    const data = await api(`/api/papers/${paperId}/estimate-irt`, {method:'POST'});
+    const data = await api(`/api/v1/papers/${paperId}/estimate-irt`, {method:'POST'});
     showToast(`IRT 估计完成，${data.estimated} 道题`, 'success');
     loadDetail(paperId);
   } catch (e) { showToast("IRT 分析失败：" + e.message, "error"); }
@@ -1538,7 +1538,7 @@ async function runSimulate(paperId, btn) {
   if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始成绩模拟（已校准至官方数据）...', 'info');
   try {
-    const data = await api(`/api/papers/${paperId}/simulate`, {method:'POST'});
+    const data = await api(`/api/v1/papers/${paperId}/simulate`, {method:'POST'});
     showToast(`模拟完成，均分 ${data.mean}`, 'success');
     loadDetail(paperId);
   } catch (e) { showToast("成绩模拟失败：" + e.message, "error"); }
@@ -1548,7 +1548,7 @@ async function runCurriculum(paperId, btn) {
   if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始课标分析...', 'info');
   try {
-    const data = await api(`/api/papers/${paperId}/curriculum-analysis`, {method:'POST'});
+    const data = await api(`/api/v1/papers/${paperId}/curriculum-analysis`, {method:'POST'});
     showToast(`课标契合度: ${data.curriculum_score?.toFixed(1) || '完成'}`, 'success');
     loadDetail(paperId);
   } catch (e) { showToast("课标分析失败：" + e.message, "error"); }
@@ -1558,7 +1558,7 @@ async function runQuality(paperId, btn) {
   if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始质量评估...', 'info');
   try {
-    const data = await api(`/api/papers/${paperId}/quality-analysis`, {method:'POST'});
+    const data = await api(`/api/v1/papers/${paperId}/quality-analysis`, {method:'POST'});
     showToast(`质量评分: ${data.overall_score?.toFixed(1) || '完成'}`, 'success');
     loadDetail(paperId);
   } catch (e) { showToast("质量评估失败：" + e.message, "error"); }
@@ -1568,7 +1568,7 @@ async function auditOnePaper(paperId, btn) {
   if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "处理中..."; btn._origText = _t; }
   showToast('开始真实性审核...', 'info');
   try {
-    const data = await api(`/api/audit/paper/${paperId}`, {method:'POST'});
+    const data = await api(`/api/v1/audit/paper/${paperId}`, {method:'POST'});
     showToast(`审核完成: ${data.grade}级 (${data.score}分)`, data.score>=75?'success':'error');
   } catch (e) { showToast("审核失败：" + e.message, "error"); }
   finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '真实性审核'; } }
@@ -1587,7 +1587,7 @@ async function startCollect(btn) {
   if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "采集中..."; btn._origText = _t; }
   showToast('开始采集...', 'info');
   try {
-    const data = await api(`/api/scrape/collect?${params}`, {method:'POST'});
+    const data = await api(`/api/v1/scrape/collect?${params}`, {method:'POST'});
     showToast(`采集完成：发现 ${data.found} 份，保存 ${data.saved} 份，跳过重复 ${data.skipped_duplicates} 份`, 'success');
     loadCollectStatus();
   } catch (e) { showToast("采集失败：" + e.message, "error"); }
@@ -1596,7 +1596,7 @@ async function startCollect(btn) {
 
 async function loadCollectStatus() {
   try {
-    const data = await api('/api/scrape/status');
+    const data = await api('/api/v1/scrape/status');
     const cs = document.getElementById('collectStats');
     cs.innerHTML = `
       <div class="stat-card blue"><div class="stat-icon">&#128196;</div><div class="stat-value">${data.total_papers}</div><div class="stat-label">试卷总数</div></div>
@@ -1654,7 +1654,7 @@ async function loadDocs() {
   if (category) params.set('category', category);
 
   try {
-    const data = await api(`/api/official-docs?${params}`);
+    const data = await api(`/api/v1/official-docs?${params}`);
     const list = document.getElementById('docsList');
     if (!data.data.length) {
       list.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128214;</div><div class="empty-text">暂无官方文件</div></div>';
@@ -1683,7 +1683,7 @@ async function loadDocs() {
 async function refreshDocs() {
   showToast('正在从官方源刷新文件库...', 'info');
   try {
-    const data = await api('/api/official-docs/refresh', {method:'POST'});
+    const data = await api('/api/v1/official-docs/refresh', {method:'POST'});
     showToast(`刷新完成: 发现 ${data.found} 篇, 新增 ${data.added} 篇`, 'success');
     loadDocs();
   } catch (e) { showToast("刷新失败：" + e.message, "error"); }
@@ -1692,7 +1692,7 @@ async function refreshDocs() {
 // ===== 真实性审核 =====
 async function loadAuditPage() {
   try {
-    const data = await api('/api/audit/summary');
+    const data = await api('/api/v1/audit/summary');
     const s = document.getElementById('auditStats');
     s.innerHTML = `
       <div class="stat-card blue"><div class="stat-icon">&#128196;</div><div class="stat-value">${data.total_papers}</div><div class="stat-label">试卷总数</div></div>
@@ -1706,14 +1706,14 @@ async function runBatchAudit(btn) {
   if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "批量审核中..."; btn._origText = _t; }
   showToast('开始批量审核...', 'info');
   try {
-    const data = await api('/api/audit/batch?limit=50', {method:'POST'});
+    const data = await api('/api/v1/audit/batch?limit=50', {method:'POST'});
     showToast(`审核完成: ${data.total_audited} 份 (A:${data.grade_distribution.A||0} B:${data.grade_distribution.B||0} C:${data.grade_distribution.C||0} D:${data.grade_distribution.D||0})`, 'success');
     loadAuditPage();
   } catch (e) { showToast("批量审核失败：" + e.message, "error"); }
   finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '批量审核'; } }
 }
 
-// ===== 试卷质量分析报告（消费 /api/papers/{id}/analyze 与 /report） =====
+// ===== 试卷质量分析报告（消费 /api/v1/papers/{id}/analyze 与 /report） =====
 // 维度中文标签
 const DIM_LABELS = {
   difficulty: '难度',
@@ -1726,7 +1726,7 @@ const DIM_LABELS = {
 // 保存 Chart 实例，便于重新渲染前销毁
 let analysisCharts = {};
 
-// 生成报告（POST /api/papers/{id}/analyze）
+// 生成报告（POST /api/v1/papers/{id}/analyze）
 async function runPaperAnalysis(paperId, btn) {
   if (btn) { btn.disabled = true; const _t = btn.textContent; btn.textContent = "生成中..."; btn._origText = _t; }
   const container = document.getElementById('analysisReport');
@@ -1735,7 +1735,7 @@ async function runPaperAnalysis(paperId, btn) {
   container.scrollIntoView({ behavior: 'smooth', block: 'start' });
   showToast('正在生成试卷质量分析报告...', 'info');
   try {
-    const report = await api(`/api/papers/${paperId}/analyze`, { method: 'POST' });
+    const report = await api(`/api/v1/papers/${paperId}/analyze`, { method: 'POST' });
     renderAnalysis(report, paperId);
     showToast('质量分析报告已生成', 'success');
   } catch (e) {
@@ -1744,7 +1744,7 @@ async function runPaperAnalysis(paperId, btn) {
   finally { if (btn) { btn.disabled = false; btn.textContent = btn._origText || '质量分析报告'; } }
 }
 
-// 加载已存报告（GET /api/papers/{id}/report）
+// 加载已存报告（GET /api/v1/papers/{id}/report）
 async function loadStoredReport(paperId) {
   const container = document.getElementById('analysisReport');
   if (!container) return;
@@ -1752,7 +1752,7 @@ async function loadStoredReport(paperId) {
   container.scrollIntoView({ behavior: 'smooth', block: 'start' });
   showToast('正在加载已存报告...', 'info');
   try {
-    const report = await api(`/api/papers/${paperId}/report`);
+    const report = await api(`/api/v1/papers/${paperId}/report`);
     renderAnalysis(report, paperId);
     showToast('已加载已存报告', 'success');
   } catch (e) {
@@ -1953,7 +1953,7 @@ function renderAnalysisCharts(report) {
 // 从 API 加载远端考试标签，回退硬编码
 async function loadExamTags() {
     try {
-        const resp = await fetch('/api/filters');
+        const resp = await fetch('/api/v1/filters');
         const data = await resp.json();
         if (data.exam_tags && data.exam_tags.length > 0) {
             examTags = data.exam_tags;
@@ -1975,7 +1975,7 @@ async function init() {
   }).catch(() => {/* 保持硬编码值已就绪 */});
 
   try {
-    const filters = await api('/api/filters');
+    const filters = await api('/api/v1/filters');
     const subjectSel = document.getElementById('filterSubject');
     const collectSubj = document.getElementById('collectSubject');
     Object.entries(filters.paper_types || {}).forEach(([k,v]) => {
@@ -2008,7 +2008,7 @@ async function init() {
 
     // 官方文件分类
     try {
-      const cats = await api('/api/official-docs/categories');
+      const cats = await api('/api/v1/official-docs/categories');
       const catSel = document.getElementById('docCategory');
       (cats || []).forEach(c => {
         catSel.innerHTML += `<option value="${c.id}">${c.name}</option>`;

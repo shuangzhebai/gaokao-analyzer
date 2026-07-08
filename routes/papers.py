@@ -28,14 +28,16 @@ router = APIRouter()
 
 # ============ 科目相关 ============
 
-@router.get("/api/subjects")
+@router.get("/api/subjects", include_in_schema=False)
+@router.get("/api/v1/subjects")
 async def list_subjects() -> Any:
     return [{"id": k, **v} for k, v in SUBJECTS.items()]
 
 
 # ============ 试卷管理 ============
 
-@router.get("/api/papers")
+@router.get("/api/papers", include_in_schema=False)
+@router.get("/api/v1/papers")
 async def list_papers(
     subject: Optional[str] = None,
     paper_type: Optional[str] = None,
@@ -54,7 +56,8 @@ async def list_papers(
     )
 
 
-@router.get("/api/papers/{paper_id}")
+@router.get("/api/papers/{paper_id}", include_in_schema=False)
+@router.get("/api/v1/papers/{paper_id}")
 async def get_paper(
     paper_id: int,
     db: Connection = Depends(get_db),
@@ -63,7 +66,8 @@ async def get_paper(
     return await service.get_paper(db, paper_id)
 
 
-@router.delete("/api/papers/{paper_id}")
+@router.delete("/api/papers/{paper_id}", include_in_schema=False)
+@router.delete("/api/v1/papers/{paper_id}")
 async def delete_paper(
     paper_id: int,
     db: Connection = Depends(get_db),
@@ -75,7 +79,8 @@ async def delete_paper(
 
 # ============ 试卷上传（增加查重+地区校验） ============
 
-@router.post("/api/papers/upload")
+@router.post("/api/papers/upload", include_in_schema=False)
+@router.post("/api/v1/papers/upload")
 async def upload_paper(
     file: UploadFile = File(...),
     subject: str = Form("math"),
@@ -97,7 +102,8 @@ async def upload_paper(
 
 # ============ 课标契合度分析 ============
 
-@router.post("/api/papers/{paper_id}/curriculum-analysis")
+@router.post("/api/papers/{paper_id}/curriculum-analysis", include_in_schema=False)
+@router.post("/api/v1/papers/{paper_id}/curriculum-analysis")
 async def analyze_curriculum(
     paper_id: int,
     db: Connection = Depends(get_db),
@@ -109,7 +115,8 @@ async def analyze_curriculum(
 
 # ============ 题目质量评估 ============
 
-@router.post("/api/papers/{paper_id}/quality-analysis")
+@router.post("/api/papers/{paper_id}/quality-analysis", include_in_schema=False)
+@router.post("/api/v1/papers/{paper_id}/quality-analysis")
 async def analyze_quality(
     paper_id: int,
     db: Connection = Depends(get_db),
@@ -121,7 +128,8 @@ async def analyze_quality(
 
 # ============ 优质题推荐 ============
 
-@router.get("/api/quality-questions")
+@router.get("/api/quality-questions", include_in_schema=False)
+@router.get("/api/v1/quality-questions")
 async def get_quality_questions(
     subject: Optional[str] = None,
     q_type: Optional[str] = None,
@@ -137,7 +145,8 @@ async def get_quality_questions(
 
 # ============ 批量操作 ============
 
-@router.post("/api/papers/batch/estimate-irt")
+@router.post("/api/papers/batch/estimate-irt", include_in_schema=False)
+@router.post("/api/v1/papers/batch/estimate-irt")
 async def batch_estimate_irt(
     subject: Optional[str] = None,
     paper_type: Optional[str] = None,
@@ -151,7 +160,8 @@ async def batch_estimate_irt(
     )
 
 
-@router.post("/api/papers/batch/simulate")
+@router.post("/api/papers/batch/simulate", include_in_schema=False)
+@router.post("/api/v1/papers/batch/simulate")
 async def batch_simulate(
     subject: Optional[str] = None,
     n_students: Optional[int] = Query(None, le=500000),
@@ -167,7 +177,8 @@ async def batch_simulate(
 
 # ============ IRT 参数估计 ============
 
-@router.post("/api/papers/{paper_id}/estimate-irt")
+@router.post("/api/papers/{paper_id}/estimate-irt", include_in_schema=False)
+@router.post("/api/v1/papers/{paper_id}/estimate-irt")
 async def estimate_irt(
     paper_id: int, n_sim_students: int = 5000,
     db: Connection = Depends(get_db),
@@ -179,7 +190,8 @@ async def estimate_irt(
 
 # ============ 蒙特卡洛模拟 ============
 
-@router.post("/api/papers/{paper_id}/simulate")
+@router.post("/api/papers/{paper_id}/simulate", include_in_schema=False)
+@router.post("/api/v1/papers/{paper_id}/simulate")
 async def run_simulation(
     paper_id: int, n_students: Optional[int] = Query(None, le=500000),
     db: Connection = Depends(get_db),
@@ -191,7 +203,8 @@ async def run_simulation(
 
 # ============ 拟合分析 ============
 
-@router.post("/api/analysis/fit")
+@router.post("/api/analysis/fit", include_in_schema=False)
+@router.post("/api/v1/analysis/fit")
 async def fit_analysis(
     sim_paper_id: int = Query(..., description="模拟卷 ID"),
     ref_paper_id: int = Query(..., description="真题 ID"),
@@ -208,7 +221,8 @@ async def fit_analysis(
 
 # ============ 知识点 ============
 
-@router.get("/api/knowledge-points/{subject_id}")
+@router.get("/api/knowledge-points/{subject_id}", include_in_schema=False)
+@router.get("/api/v1/knowledge-points/{subject_id}")
 async def list_knowledge_points(
     subject_id: str,
     db: Connection = Depends(get_db),
@@ -219,7 +233,8 @@ async def list_knowledge_points(
 
 # ============ 筛选元数据 ============
 
-@router.get("/api/filters")
+@router.get("/api/filters", include_in_schema=False)
+@router.get("/api/v1/filters")
 async def get_filter_options(
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
@@ -229,7 +244,8 @@ async def get_filter_options(
 
 # ============ 仪表盘统计 ============
 
-@router.get("/api/dashboard")
+@router.get("/api/dashboard", include_in_schema=False)
+@router.get("/api/v1/dashboard")
 async def dashboard_stats(
     db: Connection = Depends(get_db),
     auto_scraper: Any = Depends(get_auto_scraper),

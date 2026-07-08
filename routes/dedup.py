@@ -11,7 +11,8 @@ from deps import get_dedup_engine
 router = APIRouter()
 
 
-@router.post("/api/papers/dedup")
+@router.post("/api/papers/dedup", include_in_schema=False)
+@router.post("/api/v1/papers/dedup")
 async def check_dedup(
     title: str = Query(..., min_length=1),
     subject_id: str = Query(...),

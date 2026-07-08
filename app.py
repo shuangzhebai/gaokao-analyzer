@@ -15,14 +15,15 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
 from config import VERSION
-from deps import get_auto_scraper, get_audit_service
+from deps import get_auto_scraper, get_audit_service, repo_user
 from errors import global_exception_handler, http_exception_handler
 from lifespan import create_lifespan
+from services.auth_service import AuthService
 # 导入教育站点适配器（导入即触发 AdapterRegistry.register，scraper 构造时可见）
 import edu_source_adapters  # noqa: F401 — 注册 xueke_wang / zujuan_wang 适配器
 
 from models import get_db
-from routes import analysis, audit, dedup, official_docs, papers, scrape, search
+from routes import analysis, audit, auth, dedup, official_docs, papers, scrape, search
 
 # API 速率限制（slowapi）：若运行环境未安装 slowapi，则优雅降级（不启用限速）。
 try:
@@ -43,10 +44,16 @@ app = FastAPI(
 )
 
 # CORS 中间件（S-5：API 独立部署时跨域受限）
-# 默认宽松兼容单机开发，生产环境通过环境变量 CORS_ORIGINS 限制
+# T05: 从 CORS_ORIGINS 环境变量读取严格白名单，逗号分隔；未设置时回退通配符
+cors_origins_env = os.environ.get("CORS_ORIGINS", "")
+if cors_origins_env:
+    origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+else:
+    origins = ["*"]
+    logger.warning("CORS_ORIGINS 未设置，使用通配符 '*' — 生产环境请设置严格白名单")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -60,25 +67,76 @@ app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore
 # ============ 鉴权中间件 ============
 
 API_KEY = os.environ.get("API_KEY", "")
-EXEMPT_PATHS = {"/", "/api/health"}
+# T05: 扩展豁免路径，包含 v1 路径 + auth 注册/登录
+EXEMPT_PATHS = {
+    "/", "/api/health", "/api/v1/health",
+    "/api/auth/register", "/api/v1/auth/register",
+    "/api/auth/login", "/api/v1/auth/login",
+}
+
+# JWT 鉴权服务实例（惰性初始化，供中间件使用）
+_auth_service_instance: AuthService | None = None
+
+
+def _get_auth_service() -> AuthService:
+    """获取 AuthService 实例（线程安全的惰性初始化）。"""
+    global _auth_service_instance
+    if _auth_service_instance is None:
+        _auth_service_instance = AuthService(user_repo=repo_user)
+    return _auth_service_instance
+
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """可选的 API Key 鉴权中间件。
+    """JWT + API Key 双重鉴权中间件（T05）。
 
-    如果设置了环境变量 API_KEY，则所有 POST/DELETE/PUT 端点
-    （除白名单路径外）需要 Authorization: Bearer <API_KEY> header。
-    未设置 API_KEY 时，鉴权跳过（兼容单机使用）。
+    1. 优先尝试 JWT 令牌验证（Authorization: Bearer <JWT>）
+    2. JWT 失败时回退 API Key 验证（兼容旧客户端）
+    3. 未设置 API_KEY 且无 JWT 时，跳过鉴权（兼容单机使用）
     """
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
+        # 豁免路径不鉴权
+        if request.url.path in EXEMPT_PATHS:
+            request.state.user = None
+            return await call_next(request)
+
+        auth = request.headers.get("Authorization", "")
+
+        if auth.startswith("Bearer "):
+            token = auth[len("Bearer "):]
+            # 尝试 JWT 验证
+            auth_service = _get_auth_service()
+            try:
+                payload = auth_service.verify_token(token)
+                request.state.user = payload
+                return await call_next(request)
+            except ValueError:
+                # JWT 验证失败，回退 API Key 验证
+                pass
+
+            # API Key 验证
+            if API_KEY and token == API_KEY:
+                request.state.user = {
+                    "sub": 0, "role": "admin", "username": "api-key-user",
+                }
+                return await call_next(request)
+
+            # 既不是有效 JWT，也不是有效 API Key
+            return HTMLResponse(
+                status_code=401,
+                content="<h1>401 Unauthorized</h1><p>无效的认证令牌</p>",
+            )
+
+        # 无 Bearer token
         if API_KEY:
-            if request.method in ("POST", "DELETE", "PUT") and request.url.path not in EXEMPT_PATHS:
-                auth = request.headers.get("Authorization", "")
-                if not auth.startswith("Bearer ") or auth[len("Bearer "):] != API_KEY:
-                    return HTMLResponse(
-                        status_code=401,
-                        content="<h1>401 Unauthorized</h1><p>缺少或无效的 API Key</p>",
-                    )
+            # 检查是否需要鉴权（POST/PUT/DELETE）
+            if request.method in ("POST", "DELETE", "PUT"):
+                return HTMLResponse(
+                    status_code=401,
+                    content="<h1>401 Unauthorized</h1><p>缺少 Authorization 头</p>",
+                )
+
+        request.state.user = None
         response = await call_next(request)
         return response
 
@@ -109,7 +167,7 @@ async def add_security_headers(request: Request, call_next: Any) -> Any:
 async def audit_log_middleware(request: Request, call_next: Any) -> Any:
     """审计 POST/PUT/DELETE 请求，不阻塞正常响应。"""
     if request.method in ("POST", "PUT", "DELETE"):
-        skip_paths = ['/api/health', '/api/docs', '/api/openapi.json']
+        skip_paths = ['/api/health', '/api/v1/health', '/api/docs', '/api/openapi.json', '/api/auth', '/api/v1/auth']
         if not any(p in request.url.path for p in skip_paths):
             response = await call_next(request)
             try:
@@ -168,6 +226,7 @@ async def index(request: Request) -> Any:
 # ============ 健康检查 ============
 
 @app.get("/api/health")
+@app.get("/api/v1/health")
 async def health_check(db: Any = Depends(get_db), auto_scraper: Any = Depends(get_auto_scraper)) -> dict[str, Any]:
     try:
         count = await db.execute_fetchone("SELECT COUNT(*) as cnt FROM papers")
@@ -196,3 +255,4 @@ app.include_router(scrape.router)
 app.include_router(audit.router)
 app.include_router(official_docs.router)
 app.include_router(analysis.router)
+app.include_router(auth.router)
