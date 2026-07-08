@@ -897,6 +897,30 @@ html { scroll-behavior: smooth; }
     transform: none !important;
   }
 }
+
+/* ===== 移动端响应式优化（差距项 #12） ===== */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .mobile-tabs { display: flex !important; }
+  .content { margin-left: 0 !important; padding: 12px !important; }
+  .filter-row { flex-wrap: wrap; gap: 6px; }
+  .filter-row select, .filter-row input { width: 100% !important; }
+  .stats-grid { grid-template-columns: 1fr 1fr !important; }
+  .paper-table th:nth-child(n+4),
+  .paper-table td:nth-child(n+4) { display: none; }
+  .nav-btn span { font-size: 10px; }
+  .modal-content { width: 95% !important; margin: 5% auto !important; }
+  .section-title { font-size: 16px !important; }
+}
+
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr !important; }
+  .paper-table th:nth-child(n+3),
+  .paper-table td:nth-child(n+3) { display: none; }
+  .modal-content { padding: 12px !important; }
+  #globalSearch { width: 100% !important; margin: 4px 0 !important; }
+  button { min-height: 44px; }
+}
 </style>
 </head>
 <body>

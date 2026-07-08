@@ -6,7 +6,7 @@ v6.0: WAL模式+PRAGMA极致优化, 可观测性(X-Process-Time/健康检查指�
 """
 import logging
 import os
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -60,6 +60,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ============ WebSocket 连接管理器（差距项 #7） ============
+
+class ConnectionManager:
+    """管理 WebSocket 连接，按 task_id 分组广播任务状态。"""
+
+    def __init__(self) -> None:
+        self.active_connections: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, task_id: str) -> None:
+        await websocket.accept()
+        if task_id not in self.active_connections:
+            self.active_connections[task_id] = []
+        self.active_connections[task_id].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, task_id: str) -> None:
+        if task_id in self.active_connections:
+            self.active_connections[task_id].remove(websocket)
+            if not self.active_connections[task_id]:
+                del self.active_connections[task_id]
+
+    async def broadcast(self, task_id: str, message: dict) -> None:
+        if task_id not in self.active_connections:
+            return
+        for conn in self.active_connections[task_id][:]:
+            try:
+                await conn.send_json(message)
+            except Exception:
+                self.active_connections[task_id].remove(conn)
+
+
+manager = ConnectionManager()
 
 # v6.0: orjson 加速 JSON 序列化（~5x 快于标准 json.dumps）
 try:
@@ -368,3 +400,92 @@ app.include_router(official_docs.router)
 app.include_router(analysis.router)
 app.include_router(auth.router)
 app.include_router(tasks.router)
+
+
+# ============ WebSocket 任务状态推送（差距项 #7） ============
+
+
+@app.websocket("/ws/tasks/{task_id}")
+async def task_websocket(websocket: WebSocket, task_id: str) -> None:
+    """WebSocket 端点：监听 Celery 任务状态变化推送给前端。"""
+    await manager.connect(websocket, task_id)
+    try:
+        while True:
+            # 保持连接存活，接收 ping
+            data = await websocket.receive_text()
+            # 每收到消息就推送一次最新状态
+            from celery_app import _HAS_CELERY, app as celery_app
+            if _HAS_CELERY and celery_app is not None:
+                result = celery_app.AsyncResult(task_id)
+                await websocket.send_json({
+                    "task_id": task_id,
+                    "status": result.state,
+                    "result": result.result if result.ready() else None,
+                })
+    except WebSocketDisconnect:
+        manager.disconnect(websocket, task_id)
+    except Exception:
+        manager.disconnect(websocket, task_id)
+
+
+# ============ Prometheus 监控端点（差距项 #10） ============
+import time as _time_metrics
+
+_METRICS: dict[str, float] = {
+    "http_requests_total": 0,
+    "http_errors_total": 0,
+}
+_METRICS_DURATION: dict[str, list[float]] = {
+    "papers_list": [],
+    "papers_detail": [],
+    "search": [],
+    "health": [],
+}
+
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next: Any) -> Any:
+    """采集 Prometheus 指标。"""
+    global _METRICS
+    _METRICS["http_requests_total"] += 1
+    start = _time_metrics.perf_counter()
+    response = await call_next(request)
+    duration = _time_metrics.perf_counter() - start
+    if response.status_code >= 400:
+        _METRICS["http_errors_total"] += 1
+    # 记录各端点 P50/P99 用
+    path = request.url.path
+    for key in _METRICS_DURATION:
+        if key in path:
+            _METRICS_DURATION[key].append(duration)
+            if len(_METRICS_DURATION[key]) > 1000:
+                _METRICS_DURATION[key] = _METRICS_DURATION[key][-1000:]
+            break
+    return response
+
+
+@app.get("/metrics")
+async def prometheus_metrics() -> str:
+    """Prometheus 文本格式指标输出。"""
+    lines = [
+        "# HELP http_requests_total Total HTTP requests",
+        "# TYPE http_requests_total counter",
+        f'http_requests_total {_METRICS["http_requests_total"]:.0f}',
+        "",
+        "# HELP http_errors_total Total HTTP errors (4xx/5xx)",
+        "# TYPE http_errors_total counter",
+        f'http_errors_total {_METRICS["http_errors_total"]:.0f}',
+        "",
+    ]
+    # P99 延迟
+    for name, durations in _METRICS_DURATION.items():
+        if durations:
+            sorted_d = sorted(durations)
+            p99 = sorted_d[int(len(sorted_d) * 0.99)]
+            p50 = sorted_d[int(len(sorted_d) * 0.50)]
+            lines.append(f'# HELP http_{name}_duration_seconds Request duration')
+            lines.append(f'# TYPE http_{name}_duration_seconds gauge')
+            lines.append(f'http_{name}_duration_seconds{{quantile="0.5"}} {p50:.4f}')
+            lines.append(f'http_{name}_duration_seconds{{quantile="0.99"}} {p99:.4f}')
+            lines.append("")
+    return "\n".join(lines)
