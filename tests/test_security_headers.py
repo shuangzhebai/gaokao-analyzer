@@ -71,7 +71,7 @@ class TestAppContext:
 
             # version 来自 config.VERSION
             assert ctx.version == VERSION
-            assert ctx.version == "5.1", f"version 期望 5.1, 实际 {ctx.version!r}"
+            assert ctx.version == "6.0", f"version 期望 6.0, 实际 {ctx.version!r}"
 
             # 14 个引擎单例已注入
             assert ctx.engine_count == 14, f"engine_count 期望 14, 实际 {ctx.engine_count}"

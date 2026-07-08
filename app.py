@@ -1,8 +1,7 @@
 from typing import Any, Callable
 """
-高考模拟卷智能分析系统 v5.1 - Web API 装配
-v5.1: 路由拆分(routes/*)、lifespan 改造(@asynccontextmanager)、异常安全(R-2)、
-      依赖注入(T04)、版本化迁移(T01)、统一版本号(Q-8)、前端内存缓存(B-4)
+高考模拟卷智能分析系统 v6.0 - Web API 装配
+v6.0: WAL模式+PRAGMA极致优化, 可观测性(X-Process-Time/健康检查指标), 版本升级
 本文件只负责：创建 FastAPI 实例、注册 lifespan/异常处理器、装配路由、提供页面与健康检查。
 """
 import logging
@@ -161,6 +160,24 @@ async def add_security_headers(request: Request, call_next: Any) -> Any:
     return response
 
 
+# ============ 请求耗时 + 速率限制头中间件（v6.0 可观测性） ============
+
+@app.middleware("http")
+async def add_perf_headers(request: Request, call_next: Any) -> Any:
+    """为每个响应添加 X-Process-Time 和 X-RateLimit 头。"""
+    import time as _t
+
+    start = _t.perf_counter()
+    response = await call_next(request)
+    elapsed_ms = round((_t.perf_counter() - start) * 1000, 1)
+    response.headers["X-Process-Time"] = f"{elapsed_ms}ms"
+    response.headers["X-App-Version"] = VERSION
+    # 若 slowapi 已注册，附加当前限速状态
+    if getattr(request.app.state, "limiter", None) is not None:
+        response.headers["X-RateLimit-Limit"] = "200/minute"
+    return response
+
+
 # ============ 操作审计日志中间件 ============
 # 审计 POST/PUT/DELETE 请求，自动记录操作者、资源、IP、UA 到 audit_log 表。
 # 审计失败绝不阻塞用户请求——仅打印警告日志。
@@ -243,24 +260,76 @@ async def get_locale(lang: str) -> dict[str, str]:
         return {}
 
 
-# ============ 健康检查 ============
+# ============ 健康检查（极致可观测性） ============
+_APP_START_TIME: float = 0.0
+import time as _time_module
+
+
+@app.on_event("startup")
+async def _record_startup() -> None:
+    global _APP_START_TIME
+    _APP_START_TIME = _time_module.time()
+
 
 @app.get("/api/health")
 @app.get("/api/v1/health")
-async def health_check(db: Any = Depends(get_db), auto_scraper: Any = Depends(get_auto_scraper)) -> dict[str, Any]:
+async def health_check(request: Request, db: Any = Depends(get_db), auto_scraper: Any = Depends(get_auto_scraper)) -> dict[str, Any]:
     try:
         count = await db.execute_fetchone("SELECT COUNT(*) as cnt FROM papers")
         docs_count = await db.execute_fetchone("SELECT COUNT(*) as cnt FROM official_docs")
-        return {
+
+        # 数据库性能指标
+        db_stats: dict[str, Any] = {"connected": True}
+        try:
+            cur = await db.execute("PRAGMA journal_mode")
+            jm = await cur.fetchone()
+            db_stats["journal_mode"] = jm[0] if jm else "unknown"
+            cur = await db.execute("PRAGMA page_count")
+            pc = await cur.fetchone()
+            cur = await db.execute("PRAGMA page_size")
+            ps = await cur.fetchone()
+            if pc and ps:
+                db_stats["db_size_mb"] = round(pc[0] * ps[0] / 1048576, 2)
+        except Exception:
+            db_stats["detail_error"] = "pragma_query_failed"
+
+        # 缓存状态 (P1-01)
+        cache_stats: dict[str, Any] = {"redis": getattr(celery_app, "_HAS_CELERY", False)}
+        try:
+            from services.cache_service import get_cache
+
+            cs = get_cache()
+            cache_stats["l1_entries"] = len(cs._l1)
+        except Exception:
+            cache_stats["l1_entries"] = -1
+
+        # 运行时上下文 (P0)
+        ctx = getattr(request.app.state, "ctx", None)
+
+        response_data: dict[str, Any] = {
             "status": "ok",
+            "version": VERSION,
+            "uptime_seconds": round(_time_module.time() - _APP_START_TIME, 1),
             "papers_count": count["cnt"] if count else 0,
             "official_docs_count": docs_count["cnt"] if docs_count else 0,
-            "version": VERSION,
+            "database": db_stats,
+            "cache": cache_stats,
+            "engines": len([
+                a for a in dir(request.app.state)
+                if not a.startswith("_") and a not in ("index_html", "ctx", "limiter", "db")
+                and not a.endswith("_service")
+            ]),
             "features": ["fts5_search", "deepseek_dedup", "source_tracking",
                          "region_validator", "auto_scraper", "cross_verify",
-                         "official_docs", "calibrated_simulation", "auth_audit"],
+                         "official_docs", "calibrated_simulation", "auth_audit",
+                         "redis_cache", "celery_async", "numba_jit",
+                         "meilisearch", "pwa", "i18n"],
             "auto_scraper_status": auto_scraper.get_status() if auto_scraper else None,
         }
+        if ctx:
+            response_data["python_version"] = ctx.python_version
+            response_data["deepseek_enabled"] = ctx.deepseek_enabled
+        return response_data
     except Exception as e:  # noqa: BLE001
         logger.error("健康检查失败: %s", e)
         return {"status": "error", "message": "服务暂不可用"}

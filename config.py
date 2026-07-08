@@ -1,6 +1,6 @@
 """
-高考模拟卷智能分析系统 v5.1 - 配置文件
-v5.1: 地区层级映射、自动采集调度、官方文档源、校准数据
+高考模拟卷智能分析系统 v6.0 - 配置文件
+v6.0: WAL模式数据库优化, MEILISEARCH配置, REDIS/CELERY配置, 运行时可调整权重
 """
 import os
 
@@ -10,7 +10,7 @@ DOWNLOAD_DIR = os.path.join(DATA_DIR, "downloads")
 DB_PATH = os.path.join(DATA_DIR, "gaokao.db")
 
 # 统一版本常量：消除 app.py/overview 版本标识混乱（Q-8）
-VERSION = "5.1"
+VERSION = "6.0"
 
 # 科目配置
 SUBJECTS = {
