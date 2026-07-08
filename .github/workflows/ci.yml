@@ -33,3 +33,6 @@ jobs:
 
       - name: Pytest
         run: pytest tests/ -q
+
+      - name: Coverage
+        run: pytest tests/ --cov=. --cov-report=term-missing -q
