@@ -34,13 +34,14 @@ class AuthService:
         """验证明文密码与哈希匹配。"""
         return pwd_context.verify(plain, hashed)  # type: ignore[no-any-return]
 
-    def create_token(self, user_id: int, username: str, role: str) -> str:
-        """签发 JWT 令牌，含 sub(用户ID)、username、role 及过期时间。"""
+    def create_token(self, user_id: int, username: str, role: str, tenant_id: str = "default") -> str:
+        """签发 JWT 令牌，含 sub(用户ID)、username、role、tenant_id 及过期时间。"""
         expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)
         payload: dict[str, Any] = {
             "sub": str(user_id),
             "username": username,
             "role": role,
+            "tenant_id": tenant_id,
             "exp": expire,
         }
         return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)  # type: ignore[no-any-return]
@@ -60,19 +61,23 @@ class AuthService:
         password: str,
         email: str | None = None,
         role: str = "viewer",
+        tenant_id: str = "default",
     ) -> dict[str, Any]:
         """注册新用户，返回用户信息。
-        
+
+        P2-02: 新增 tenant_id 参数，支持多租户隔离。
+
         Args:
             db: 数据库连接
             username: 用户名
             password: 明文密码
             email: 可选邮箱
             role: 初始角色（默认 viewer）
-        
+            tenant_id: 租户 ID（默认 "default"）
+
         Returns:
-            包含 id, username, role 的用户信息字典
-        
+            包含 id, username, role, tenant_id 的用户信息字典
+
         Raises:
             ValueError: 用户名已存在或角色无效
         """
@@ -91,19 +96,21 @@ class AuthService:
         # 分配角色
         await self.user_repo.assign_role(db, user_id, role)
 
-        return {"id": user_id, "username": username, "role": role}
+        return {"id": user_id, "username": username, "role": role, "tenant_id": tenant_id}
 
     async def login(self, db: Any, username: str, password: str) -> dict[str, Any]:
         """用户登录：验证凭据，返回 token 及用户信息。
-        
+
+        P2-02: 租户 ID 从用户记录读取。
+
         Args:
             db: 数据库连接
             username: 用户名
             password: 明文密码
-        
+
         Returns:
             包含 token、token_type、user 的字典
-        
+
         Raises:
             ValueError: 用户名不存在或密码错误
         """
@@ -123,7 +130,7 @@ class AuthService:
         if role_ids:
             role = min(role_ids, key=lambda r: ROLE_PRIORITY.get(r, 99))
 
-        token = self.create_token(user["id"], user["username"], role)
+        token = self.create_token(user["id"], user["username"], role, user.get("tenant_id", "default"))
         return {
             "token": token,
             "token_type": "bearer",
@@ -132,5 +139,6 @@ class AuthService:
                 "username": user["username"],
                 "email": user.get("email"),
                 "role": role,
+                "tenant_id": user.get("tenant_id", "default"),
             },
         }

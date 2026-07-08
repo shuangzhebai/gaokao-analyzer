@@ -14,7 +14,7 @@ logger = logging.getLogger("gaokao")
 # ============ 版本化迁移（T01：防清空数据） ============
 
 # 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
-CURRENT_SCHEMA_VERSION = 4
+CURRENT_SCHEMA_VERSION = 5
 
 
 async def _ensure_schema_migrations(db: Any) -> None:
@@ -146,12 +146,31 @@ async def _migrate_to_v4(db: Any) -> None:
     )
 
 
+async def _migrate_to_v5(db: Any) -> None:
+    """阶段五迁移 v5：添加多租户 tenant_id 字段。"""
+    # 给 papers 表加 tenant_id 列（幂等）
+    try:
+        await db.execute("ALTER TABLE papers ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'")
+    except Exception:
+        pass  # 列已存在则忽略
+    try:
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_papers_tenant ON papers(tenant_id)")
+    except Exception:
+        pass
+    # 给 users 表加 tenant_id 列
+    try:
+        await db.execute("ALTER TABLE users ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'")
+    except Exception:
+        pass
+
+
 # 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
 MIGRATIONS = {
     1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
     2: ("phase2: 新增 paper_reports 报告表", _migrate_to_v2),
     3: ("phase3: 新增 audit_log 操作审计日志表", _migrate_to_v3),
     4: ("phase4: 新增 users/roles/user_roles 用户与角色表", _migrate_to_v4),
+    5: ("phase5: 多租户 tenant_id 字段（papers + users）", _migrate_to_v5),
 }
 
 

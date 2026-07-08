@@ -205,3 +205,11 @@ def require_role(required_role: str) -> Any:
             )
         return current_user
     return _check_role
+
+
+async def get_current_tenant(request: Request) -> str:
+    """P2-02: 从 JWT payload 提取租户 ID。未认证时返回 'default'。"""
+    user = getattr(request.state, 'user', None)
+    if user and isinstance(user, dict):
+        return user.get("tenant_id", "default")
+    return "default"

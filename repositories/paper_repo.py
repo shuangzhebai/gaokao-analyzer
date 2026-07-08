@@ -16,10 +16,18 @@ class PaperRepository:
         analysis_status: Optional[str] = None,
         page: int = 1,
         size: int = 20,
+        tenant_id: Optional[str] = None,
     ) -> dict[str, Any]:
-        """分页查询试卷列表，排除 duplicate 状态的试卷。"""
+        """分页查询试卷列表，排除 duplicate 状态的试卷。
+        
+        P2-02: tenant_id 参数实现多租户数据隔离。
+        """
         conditions: list[str] = []
         params: list[Any] = []
+        # 多租户隔离
+        if tenant_id:
+            conditions.append("tenant_id = ?")
+            params.append(tenant_id)
         if subject:
             conditions.append("subject_id = ?")
             params.append(subject)

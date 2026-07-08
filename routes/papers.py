@@ -18,6 +18,7 @@ from deps import (
     get_irt_model, get_kp_mapper,
     get_simulator, get_fitting_analyzer, get_paper_parser,
     get_curriculum_analyzer, get_quality_scorer, get_dedup_engine, get_auto_scraper,
+    get_current_tenant,
 )
 from config import SUBJECTS, PAPER_TYPES, SOURCE_PRIORITY_MAP, REGION_HIERARCHY
 from services.paper_service import PaperService
@@ -48,11 +49,12 @@ async def list_papers(
     size: int = Query(20, ge=1, le=100),
     db: Connection = Depends(get_db),
     service: PaperService = Depends(get_paper_service),
+    tenant_id: str = Depends(get_current_tenant),
 ) -> Any:
     return await service.list_papers(
         db, subject=subject, paper_type=paper_type, year=year,
         province=province, analysis_status=analysis_status,
-        page=page, size=size,
+        page=page, size=size, tenant_id=tenant_id,
     )
 
 

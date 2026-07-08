@@ -31,12 +31,14 @@ class PaperService:
         self.analysis_repo = analysis_repo
 
     async def list_papers(self, db: Any, subject: Optional[str] = None, paper_type: Optional[str] = None, year: Optional[int] = None,
-                          province: Optional[str] = None, analysis_status: Optional[str] = None, page: int = 1, size: int = 20) -> dict[str, Any]:
-        """分页查询试卷列表"""
+                          province: Optional[str] = None, analysis_status: Optional[str] = None,
+                          page: int = 1, size: int = 20,
+                          tenant_id: Optional[str] = None) -> dict[str, Any]:
+        """分页查询试卷列表（P2-02: 多租户隔离）"""
         return await self.paper_repo.list_papers(
             db, subject=subject, paper_type=paper_type, year=year,
             province=province, analysis_status=analysis_status,
-            page=page, size=size,
+            page=page, size=size, tenant_id=tenant_id,
         )
 
     async def get_paper(self, db: Any, paper_id: int) -> dict[str, Any]:

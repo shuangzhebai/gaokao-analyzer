@@ -38,3 +38,4 @@ __pycache__/
 
 # 数据目录（如有敏感数据）
 data/
+website/build
