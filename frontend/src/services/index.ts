@@ -9,4 +9,5 @@ export * as auditService from './audit';
 export * as questionService from './question';
 export * as qualityService from './quality';
 export * as compositionService from './composition';
+export * as errorService from './error';
 export { default as api } from './api';

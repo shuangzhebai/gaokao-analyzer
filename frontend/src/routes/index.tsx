@@ -17,6 +17,10 @@ const AuditPage = lazy(() => import('../pages/audit/AuditPage'));
 const QuestionsListPage = lazy(() => import('../pages/questions/QuestionsListPage'));
 const QualityPage = lazy(() => import('../pages/quality/QualityPage'));
 const CompositionPage = lazy(() => import('../pages/composition/CompositionPage'));
+const ErrorsPage = lazy(() => import('../pages/errors/ErrorsPage'));
+const StudentDashboard = lazy(() => import('../pages/dashboard/StudentDashboard'));
+const TeacherDashboard = lazy(() => import('../pages/dashboard/TeacherDashboard'));
+const ResearcherDashboard = lazy(() => import('../pages/dashboard/ResearcherDashboard'));
 
 function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -44,6 +48,10 @@ export default function AppRoutes() {
         <Route path="questions" element={<LazyLoad><QuestionsListPage /></LazyLoad>} />
         <Route path="quality" element={<LazyLoad><QualityPage /></LazyLoad>} />
         <Route path="composition" element={<LazyLoad><CompositionPage /></LazyLoad>} />
+        <Route path="errors" element={<LazyLoad><ErrorsPage /></LazyLoad>} />
+        <Route path="dashboard/student" element={<LazyLoad><StudentDashboard /></LazyLoad>} />
+        <Route path="dashboard/teacher" element={<LazyLoad><TeacherDashboard /></LazyLoad>} />
+        <Route path="dashboard/researcher" element={<LazyLoad><ResearcherDashboard /></LazyLoad>} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
