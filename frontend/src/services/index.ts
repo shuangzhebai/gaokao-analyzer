@@ -6,4 +6,5 @@ export * as searchService from './search';
 export * as collectService from './collect';
 export * as docService from './doc';
 export * as auditService from './audit';
+export * as questionService from './question';
 export { default as api } from './api';

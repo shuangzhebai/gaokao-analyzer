@@ -677,6 +677,17 @@ MEILISEARCH_API_KEY: str = os.environ.get("MEILISEARCH_API_KEY", "")
 QUESTION_TYPE_CONFIG = {
     "subjects": ["math", "chinese", "english", "physics", "chemistry", "biology", "history", "geography", "politics"],
     "default_model": "rule_based",  # rule_based | lightgbm
+    "subject_question_map": {
+        "math": {"choice": ["single_choice"], "fill": ["fill"], "solve": ["calculation", "proof", "comprehensive"]},
+        "chinese": {"choice": ["single_choice"], "fill": ["fill"], "solve": ["reading_comprehension", "essay", "translation"]},
+        "english": {"choice": ["single_choice", "cloze"], "fill": ["fill", "word_fill"], "solve": ["reading_comprehension", "translation", "writing"]},
+        "physics": {"choice": ["single_choice", "multi_choice"], "fill": ["fill"], "solve": ["calculation", "experiment"]},
+        "chemistry": {"choice": ["single_choice"], "fill": ["fill"], "solve": ["calculation", "experiment", "inference"]},
+        "biology": {"choice": ["single_choice"], "fill": ["fill"], "solve": ["comprehensive", "experiment"]},
+        "history": {"choice": ["single_choice"], "fill": ["fill"], "solve": ["material_analysis", "essay"]},
+        "geography": {"choice": ["single_choice"], "fill": ["fill"], "solve": ["material_analysis", "comprehensive"]},
+        "politics": {"choice": ["single_choice"], "fill": ["fill"], "solve": ["material_analysis", "essay"]},
+    },
 }
 
 # ===== v6.0 组卷引擎配置 =====

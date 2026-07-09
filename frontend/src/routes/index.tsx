@@ -14,6 +14,7 @@ const PaperDetailPage = lazy(() => import('../pages/papers/PaperDetailPage'));
 const CollectPage = lazy(() => import('../pages/collect/CollectPage'));
 const DocsPage = lazy(() => import('../pages/docs/DocsPage'));
 const AuditPage = lazy(() => import('../pages/audit/AuditPage'));
+const QuestionsListPage = lazy(() => import('../pages/questions/QuestionsListPage'));
 
 function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -38,6 +39,7 @@ export default function AppRoutes() {
         <Route path="collect" element={<LazyLoad><CollectPage /></LazyLoad>} />
         <Route path="docs" element={<LazyLoad><DocsPage /></LazyLoad>} />
         <Route path="audit" element={<LazyLoad><AuditPage /></LazyLoad>} />
+        <Route path="questions" element={<LazyLoad><QuestionsListPage /></LazyLoad>} />
       </Route>
 
       <Route path="*" element={<NotFoundPage />} />
