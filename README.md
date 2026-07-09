@@ -1,13 +1,17 @@
 # 🎯 gaokao-analyzer
 
-> **高考模拟卷智能分析系统 — IRT 3PL · 蒙特卡洛模拟 · 6 维度质量分析 · DeepSeek 真实性审核**
+> **高考教育领域的开源心理测量引擎 + 智能组卷平台**
+>
+> IRT 3PL/GPCM/GRM · 题型自动分类 · 6 维质量诊断 · OR-Tools 智能组卷 · 错题闭环 · PostgreSQL
 
 [![Python](https://img.shields.io/badge/Python-3.13%2B-blue?logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com)
-[![Tests](https://img.shields.io/badge/Tests-207%20passed-success?logo=pytest)](https://github.com/shuangzhebai/gaokao-analyzer/actions)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Tests](https://img.shields.io/badge/Tests-258%20passed-success?logo=pytest)](https://github.com/shuangzhebai/gaokao-analyzer/actions)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/shuangzhebai/gaokao-analyzer?style=social)](https://github.com/shuangzhebai/gaokao-analyzer)
-[![Docusaurus](https://img.shields.io/badge/Docs-Docusaurus-3ECC5F?logo=docusaurus)](https://shuangzhebai.github.io/gaokao-analyzer)
+[![React](https://img.shields.io/badge/Frontend-React+TypeScript-61DAFB?logo=react)](https://react.dev)
+[![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2FSQLite-4169E1?logo=postgresql)](https://postgresql.org)
+[![Prometheus](https://img.shields.io/badge/Metrics-Prometheus-E6522C?logo=prometheus)](https://prometheus.io)
 
 ---
 
@@ -41,16 +45,21 @@ _(欢迎分享你的使用截图！)_
 
 | 特性 | 技术实现 | 亮点 |
 |------|---------|------|
-| 🧮 **IRT 能力估计** | 3PL 模型 + MLE | 精准评估试卷难度/区分度/猜测参数 |
+| 🧮 **IRT 心理测量引擎** | 3PL / GPCM / GRM 模型 + Numba JIT | **独家** — 竞品全部基于 CTT 统计 |
+| 🏷️ **题型自动分类** | 规则引擎 + LightGBM（P0），9 大学科 | 选择题/填空题/解答题/综合题自动识别 |
+| 📊 **6 维质量诊断** | IRT+CTT 混合模型 + 6 维雷达图 | 难度/区分度/信度/效度/知识点/题型匹配 |
+| 📝 **智能组卷** | OR-Tools CP-SAT 约束求解 | 按知识点/难度/题型多条件自动组卷+质量预检 |
+| ❌ **错题闭环** | 自动收录 → 统计分析 → IRT 诊断 → 同类推荐 | 薄弱知识点定位 + 精准推题 |
 | 🎲 **成绩模拟** | 蒙特卡洛 10 万考生 | 偏态校准 + 真实高考对标 |
-| 📊 **6 维质量分析** | 信度/效度/区分度/难度/知识点/题型 | 综合质量分一键输出 |
 | 🤖 **真实性审核** | DeepSeek AI + 多源交叉验证 | 99%+ 识别率 |
 | 🔍 **智能搜索** | Meilisearch + FTS5 降级 | 中文分词+模糊纠错+高亮 |
 | 🕸️ **多源采集** | 可插拔适配器 | 学科网/组卷网/菁优网等 7+ 源 |
-| 🔐 **安全鉴权** | JWT + RBAC + API Key 兼容 | admin/teacher/viewer 三角色 |
-| 🌐 **i18n 国际化** | locates/zh.json + en.json | 一键中英文切换 |
+| 🔐 **安全鉴权** | JWT + RBAC + Refresh Token | 黑名单吊销 + HMAC 签名 |
+| 👥 **三端工作台** | 学生/教师/教研员差异化界面 | 各自工作台 + 全链路交互 |
+| 🌐 **i18n 国际化** | locales/zh.json + en.json | 一键中英文切换 |
 | 📱 **PWA 支持** | manifest.json + Service Worker | 可安装到桌面/离线可用 |
-| 🐳 **一键部署** | Docker Compose | Docker 一键启动 |
+| 📊 **标准化监控** | Prometheus Counter/Histogram/Gauge | 可选 Grafana 面板 |
+| 🐳 **一键部署** | Docker Compose + Helm Chart | Docker/K8s 双模式 |
 
 ## 🚀 5 分钟上手
 
@@ -80,53 +89,90 @@ curl "http://localhost:8000/api/v1/papers" \
 ## 🏗️ 架构
 
 ```
-routes/  →  services/  →  repositories/  →  SQLite (WAL 模式)
-                    ↕
-               engines/  (IRT/MC/分析引擎)
-                    ↕
-               Redis (缓存 + Celery Broker)
-                    ↕
-               Meilisearch (全文搜索)
+                    ┌──────────────────────┐
+                    │   前端 (React+ECharts)│
+                    │  /questions /quality  │
+                    │  /composition /errors │
+                    │  学生/教师/教研员工作台│
+                    └──────┬───────────────┘
+                           │ REST API (29 端点)
+                    ┌──────▼───────────────┐
+                    │   FastAPI 路由层      │
+                    │  questions/quality/   │
+                    │  composition/errors   │
+                    └──────┬───────────────┘
+                    ┌──────▼───────────────┐
+                    │   服务编排层          │
+                    │  Question/Quality/    │
+                    │  Composition/Error    │
+                    └──┬───────┬───────────┘
+                       │       │
+              ┌────────▼──┐ ┌──▼──────────┐
+              │  引擎层     │ │  数据访问层  │
+              │ IRT 3PL/   │ │  Repository  │
+              │ GPCM/GRM   │ │  模式抽象     │
+              │ 题型分类    │ │  PG/SQLite   │
+              │ 质量诊断    │ │  双后端      │
+              │ 组卷(OR-T) │ │              │
+              └────────────┘ └──────────────┘
+                       │              │
+              ┌────────▼──────────────▼────┐
+              │   基础设施                  │
+              │ PG · Redis · Meilisearch   │
+              │ Celery · Prometheus        │
+              └─────────────────────────────┘
 ```
 
 ## 📊 质量指标
 
 | 指标 | 数值 |
 |------|------|
-| ✅ 测试通过 | **179 tests** |
-| 🔍 类型检查 | **mypy strict — 零错误** |
-| 📈 代码覆盖率 | **54%** (5 核心模块 ≥ 50%) |
-| 🐳 容器化 | 是 (Docker + Compose) |
-| 🤖 CI | GitHub Actions |
-| 🔒 安全头 | HSTS/X-Frame/XSS/Referrer |
+| ✅ 测试通过 | **258 tests** (基线 223 + 新增 35) |
+| 🔍 类型检查 | **mypy strict** |
+| 🐳 容器化 | 是 (Docker + Compose + Helm) |
+| 🤖 CI | GitHub Actions (ruff + mypy + pytest + pip-audit + 前端 build) |
+| 🔒 安全头 | HSTS/X-Frame/XSS/Referrer/CSP |
+| 🔐 签名 | Webhook HMAC-SHA256 + JWT 黑名单吊销 |
 | ⚡ 速率限制 | 200/min (slowapi) |
 | 📝 审计日志 | 操作全链路可追溯 |
-| 🎨 前端 | PWA + 液态玻璃 UI + 中英文 |
+| 📊 监控 | Prometheus 标准化指标 |
+| 🎨 前端 | React 18 + MUI v6 + ECharts + TypeScript |
 
 ## 📖 文档
 
 完整文档站：https://shuangzhebai.github.io/gaokao-analyzer
 
-- [快速开始](website/docs/index.md)
-- [API 参考](website/docs/api.md)
-- [架构说明](website/docs/architecture.md)
-- [部署指南](website/docs/deployment.md)
-- [开发指南](website/docs/development.md)
+- [快速开始](docs/website/docs/index.md)
+- [API 参考](docs/website/docs/api.md)
+- [架构说明](docs/website/docs/architecture.md)
+- [部署指南](docs/website/docs/deployment.md)
+- [开发指南](docs/website/docs/development.md)
+
+## 🛣️ 路线图
+
+详见 [ROADMAP.md](ROADMAP.md)
+
+- **v6.1** (2026 Q3): OR-Tools 激活 · PG 正式切 · 数据采集 · 一键部署优化
+- **v6.2** (2026 Q4): PWA 增强 · Word/LaTeX 导出 · 多租户 · 学情报告
+- **v7.0** (2027): 原生移动 App · AI 辅助组卷 · 拍照搜题 · 企业版
 
 ## 🔬 技术栈
 
 | 领域 | 技术 |
 |------|------|
 | Web 框架 | FastAPI + Uvicorn |
-| 数据库 | SQLite (WAL 模式) |
+| 数据库 | PostgreSQL（主库）/ SQLite（开发退路） |
+| ORM / Repository | 手写 Repository 模式（支持 asyncpg / aiosqlite 双后端） |
 | 缓存 | Redis (L1 LRU + L2 Redis) |
 | 异步任务 | Celery + Redis broker |
 | 搜索引擎 | Meilisearch / SQLite FTS5 |
 | 数值计算 | NumPy + SciPy + Numba JIT |
-| 鉴权 | JWT (python-jose) + bcrypt |
-| 前端 | 单页 SPA + Chart.js |
-| 容器化 | Docker + Compose |
-| CI/CD | GitHub Actions |
+| 心理测量 | IRT 3PL / GPCM / GRM + OR-Tools CP-SAT |
+| 鉴权 | JWT (python-jose) + bcrypt + Refresh Token + 黑名单 |
+| 前端 | React 18 + TypeScript + MUI v6 + ECharts + Tailwind |
+| 监控 | Prometheus (prometheus_client) |
+| 容器化 | Docker + Compose + Helm Chart |
+| CI/CD | GitHub Actions (lint + typecheck + test + security + build) |
 | 文档 | Docusaurus + OpenAPI |
 
 ## 👥 社区
