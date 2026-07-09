@@ -26,7 +26,7 @@ from services.auth_service import AuthService
 import edu_source_adapters  # noqa: F401 — 注册 xueke_wang / zujuan_wang 适配器
 
 from models import get_db
-from routes import analysis, audit, auth, composition, dedup, errors, official_docs, papers, quality, questions, scrape, search, tasks, webhooks
+from routes import analysis, audit, auth, collection, composition, dedup, errors, official_docs, papers, quality, questions, scrape, search, tasks, webhooks
 
 # API 速率限制（slowapi）：若运行环境未安装 slowapi，则优雅降级（不启用限速）。
 try:
@@ -466,6 +466,7 @@ app.include_router(questions.router)
 app.include_router(quality.router)
 app.include_router(composition.router)
 app.include_router(errors.router)
+app.include_router(collection.router)
 
 
 # ============ WebSocket 任务状态推送（差距项 #7） ============

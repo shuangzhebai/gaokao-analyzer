@@ -28,6 +28,7 @@ from services.scrape_service import ScrapeService
 from services.filter_service import FilterService
 from services.audit_service import AuditService
 from services.auth_service import AuthService
+from services.collection_service import CollectionService
 
 # ============ Repository 单例（无状态，可跨请求复用） ============
 repo_paper = PaperRepository()
@@ -143,6 +144,13 @@ def get_dedup_engine(request: Request) -> Any:
 
 def get_auto_scraper(request: Request) -> Any:
     return request.app.state.auto_scraper
+
+
+def get_collection_service(request: Request) -> Any:
+    """惰性初始化并返回 CollectionService 单例。"""
+    if not hasattr(request.app.state, 'collection_service'):
+        request.app.state.collection_service = CollectionService()
+    return request.app.state.collection_service
 
 
 def get_paper_analyzer(request: Request) -> Any:

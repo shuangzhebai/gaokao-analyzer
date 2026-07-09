@@ -14,7 +14,7 @@ logger = logging.getLogger("gaokao")
 # ============ 版本化迁移（T01：防清空数据） ============
 
 # 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
-CURRENT_SCHEMA_VERSION = 8
+CURRENT_SCHEMA_VERSION = 9
 
 
 async def _ensure_schema_migrations(db: Any) -> None:
@@ -266,6 +266,24 @@ async def _migrate_to_v8(db: Any) -> None:
     await db.execute("CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires ON token_blacklist(expires_at)")
 
 
+async def _migrate_to_v8_5(db: Any) -> None:
+    """阶段八点五迁移 v8.5：采集日志表 collection_logs。"""
+    await db.execute("""CREATE TABLE IF NOT EXISTS collection_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT NOT NULL,
+        task_type TEXT DEFAULT 'scheduled',
+        started_at TEXT,
+        completed_at TEXT,
+        papers_found INTEGER DEFAULT 0,
+        papers_new INTEGER DEFAULT 0,
+        questions_new INTEGER DEFAULT 0,
+        errors TEXT DEFAULT '[]',
+        status TEXT DEFAULT 'running'
+    )""")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_collection_logs_status ON collection_logs(status)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_collection_logs_started ON collection_logs(started_at)")
+
+
 # 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
 MIGRATIONS = {
     1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
@@ -276,6 +294,7 @@ MIGRATIONS = {
     6: ("phase6: 新增 webhooks 表", _migrate_to_v6),
     7: ("phase7: v6.0 新表 — 题型分类/错题库/学生画像/组卷模板与记录", _migrate_to_v7),
     8: ("phase8: P2-4 JWT token 黑名单表", _migrate_to_v8),
+    9: ("phase8.5: 采集日志表 collection_logs", _migrate_to_v8_5),
 }
 
 
@@ -754,6 +773,22 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
 );
 CREATE INDEX IF NOT EXISTS idx_token_blacklist_jti ON token_blacklist(jti);
 CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires ON token_blacklist(expires_at);
+
+-- v8.5: 采集日志表
+CREATE TABLE IF NOT EXISTS collection_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    task_type TEXT DEFAULT 'scheduled',
+    started_at TEXT,
+    completed_at TEXT,
+    papers_found INTEGER DEFAULT 0,
+    papers_new INTEGER DEFAULT 0,
+    questions_new INTEGER DEFAULT 0,
+    errors TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'running'
+);
+CREATE INDEX IF NOT EXISTS idx_collection_logs_status ON collection_logs(status);
+CREATE INDEX IF NOT EXISTS idx_collection_logs_started ON collection_logs(started_at);
 """
 
 

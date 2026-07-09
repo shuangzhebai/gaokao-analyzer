@@ -12,6 +12,7 @@ const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
 const PaperListPage = lazy(() => import('../pages/papers/PaperListPage'));
 const PaperDetailPage = lazy(() => import('../pages/papers/PaperDetailPage'));
 const CollectPage = lazy(() => import('../pages/collect/CollectPage'));
+const CollectionDashboard = lazy(() => import('../pages/collection/index'));
 const DocsPage = lazy(() => import('../pages/docs/DocsPage'));
 const AuditPage = lazy(() => import('../pages/audit/AuditPage'));
 const QuestionsListPage = lazy(() => import('../pages/questions/QuestionsListPage'));
@@ -43,6 +44,7 @@ export default function AppRoutes() {
         <Route path="papers" element={<LazyLoad><PaperListPage /></LazyLoad>} />
         <Route path="papers/:id" element={<LazyLoad><PaperDetailPage /></LazyLoad>} />
         <Route path="collect" element={<LazyLoad><CollectPage /></LazyLoad>} />
+        <Route path="collection" element={<LazyLoad><CollectionDashboard /></LazyLoad>} />
         <Route path="docs" element={<LazyLoad><DocsPage /></LazyLoad>} />
         <Route path="audit" element={<LazyLoad><AuditPage /></LazyLoad>} />
         <Route path="questions" element={<LazyLoad><QuestionsListPage /></LazyLoad>} />
