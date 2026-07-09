@@ -672,6 +672,12 @@ CELERY_RESULT_BACKEND: str = os.environ.get("CELERY_RESULT_BACKEND", "redis://lo
 MEILISEARCH_URL: str = os.environ.get("MEILISEARCH_URL", "http://localhost:7700")
 MEILISEARCH_API_KEY: str = os.environ.get("MEILISEARCH_API_KEY", "")
 
+# Webhook 安全配置（P1-6）
+WEBHOOK_SECRET: str = os.environ.get("WEBHOOK_SECRET", "")
+WEBHOOK_ALLOWED_DOMAINS: list[str] = [
+    d.strip() for d in os.environ.get("WEBHOOK_ALLOWED_DOMAINS", "").split(",") if d.strip()
+]
+
 
 # ===== v6.0 题型分类配置 =====
 QUESTION_TYPE_CONFIG = {

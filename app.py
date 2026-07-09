@@ -9,11 +9,12 @@ import os
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from jose import JWTError, jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from starlette.responses import Response
 
-from config import VERSION, GAOKAO_ENV, CORS_ORIGINS
+from config import VERSION, GAOKAO_ENV, CORS_ORIGINS, JWT_SECRET, JWT_ALGORITHM
 from deps import get_auto_scraper, get_audit_service, repo_user
 from errors import global_exception_handler, http_exception_handler
 from lifespan import create_lifespan
@@ -451,7 +452,32 @@ app.include_router(errors.router)
 
 @app.websocket("/ws/tasks/{task_id}")
 async def task_websocket(websocket: WebSocket, task_id: str) -> None:
-    """WebSocket 端点：监听 Celery 任务状态变化推送给前端。"""
+    """WebSocket 端点：监听 Celery 任务状态变化推送给前端。
+
+    P1-7: 在握手阶段通过查询参数 ?token= 校验 JWT，无效则关闭连接（code=4001）。
+    """
+    # 从查询参数中读取 token
+    token = websocket.query_params.get("token", "")
+    if not token:
+        await websocket.close(code=4001)
+        logger.warning("WebSocket 连接拒绝: 缺少 token 参数 (task_id=%s)", task_id)
+        return
+
+    # 验证 JWT
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except JWTError:
+        await websocket.close(code=4001)
+        logger.warning("WebSocket 连接拒绝: 无效 JWT (task_id=%s)", task_id)
+        return
+
+    # 可选：验证 task 归属（当前用户只能订阅自己的 task）
+    user_sub = payload.get("sub")
+    if not user_sub:
+        await websocket.close(code=4001)
+        logger.warning("WebSocket 连接拒绝: JWT payload 缺少 sub (task_id=%s)", task_id)
+        return
+
     await manager.connect(websocket, task_id)
     try:
         while True:
