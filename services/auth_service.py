@@ -1,15 +1,21 @@
 """
 认证服务（T05）
 JWT 令牌签发/验证、密码哈希、用户注册/登录。
+P2-4: 增加 refresh token / 吊销 / jti。
 """
 import re
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from config import JWT_ALGORITHM, JWT_EXPIRE_MINUTES, JWT_SECRET
+from config import (
+    JWT_ALGORITHM, JWT_EXPIRE_MINUTES, JWT_SECRET,
+    JWT_REFRESH_EXPIRE_DAYS, JWT_REFRESH_SECRET,
+    TOKEN_BLACKLIST_ENABLED,
+)
 from repositories.user_repo import UserRepository
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -41,16 +47,34 @@ class AuthService:
         return pwd_context.verify(plain, hashed)  # type: ignore[no-any-return]
 
     def create_token(self, user_id: int, username: str, role: str, tenant_id: str = "default") -> str:
-        """签发 JWT 令牌，含 sub(用户ID)、username、role、tenant_id 及过期时间。"""
+        """签发 JWT 令牌，含 sub(用户ID)、username、role、tenant_id、jti 及过期时间。"""
         expire = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)
+        jti = str(uuid.uuid4())
         payload: dict[str, Any] = {
             "sub": str(user_id),
             "username": username,
             "role": role,
             "tenant_id": tenant_id,
+            "jti": jti,
+            "type": "access",
             "exp": expire,
         }
         return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)  # type: ignore[no-any-return]
+
+    def create_refresh_token(self, user_id: int, username: str, role: str, tenant_id: str = "default") -> str:
+        """签发 refresh JWT 令牌（更长有效期，独立 secret）。"""
+        expire = datetime.now(timezone.utc) + timedelta(days=JWT_REFRESH_EXPIRE_DAYS)
+        jti = str(uuid.uuid4())
+        payload: dict[str, Any] = {
+            "sub": str(user_id),
+            "username": username,
+            "role": role,
+            "tenant_id": tenant_id,
+            "jti": jti,
+            "type": "refresh",
+            "exp": expire,
+        }
+        return jwt.encode(payload, JWT_REFRESH_SECRET, algorithm=JWT_ALGORITHM)  # type: ignore[no-any-return]
 
     def verify_token(self, token: str) -> dict[str, Any]:
         """验证 JWT 令牌，返回 payload 或抛出异常。"""
@@ -59,6 +83,42 @@ class AuthService:
             return payload  # type: ignore[no-any-return]
         except JWTError:
             raise ValueError("无效或已过期的令牌")
+
+    def verify_refresh_token(self, token: str) -> dict[str, Any]:
+        """验证 refresh JWT 令牌，返回 payload 或抛出异常。"""
+        try:
+            payload = jwt.decode(token, JWT_REFRESH_SECRET, algorithms=[JWT_ALGORITHM])
+            return payload  # type: ignore[no-any-return]
+        except JWTError:
+            raise ValueError("无效或已过期的 refresh 令牌")
+
+    async def is_token_blacklisted(self, db: Any, jti: str) -> bool:
+        """检查 jti 是否在 token 黑名单中。"""
+        if not TOKEN_BLACKLIST_ENABLED:
+            return False
+        try:
+            row = await db.execute_fetchone(
+                "SELECT 1 FROM token_blacklist WHERE jti = ?", (jti,)
+            )
+            return row is not None
+        except Exception:  # noqa: BLE001 - 黑名单表可能尚不存在
+            return False
+
+    async def revoke_token(self, db: Any, jti: str, token_type: str, user_id: int, expires_at: str, tenant_id: str | None = None) -> None:
+        """将 token 加入黑名单（吊销）。"""
+        if not TOKEN_BLACKLIST_ENABLED:
+            return
+        try:
+            await db.execute(
+                """INSERT OR IGNORE INTO token_blacklist (jti, token_type, user_id, expires_at, tenant_id)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (jti, token_type, user_id, expires_at, tenant_id),
+            )
+            await db.commit()
+        except Exception as e:  # noqa: BLE001
+            # 黑名单插入失败不阻塞流程，仅记日志
+            import logging
+            logging.getLogger("gaokao").warning("token 吊销写入失败: %s", e)
 
     async def register(
         self,
@@ -146,8 +206,10 @@ class AuthService:
             role = min(role_ids, key=lambda r: ROLE_PRIORITY.get(r, 99))
 
         token = self.create_token(user["id"], user["username"], role, user.get("tenant_id", "default"))
+        refresh_token = self.create_refresh_token(user["id"], user["username"], role, user.get("tenant_id", "default"))
         return {
             "token": token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
             "user": {
                 "id": user["id"],

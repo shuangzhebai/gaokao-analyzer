@@ -132,6 +132,8 @@ EXEMPT_PATHS = {
     "/", "/api/health", "/api/v1/health",
     "/api/auth/register", "/api/v1/auth/register",
     "/api/auth/login", "/api/v1/auth/login",
+    "/api/auth/refresh", "/api/v1/auth/refresh",
+    "/api/auth/revoke", "/api/v1/auth/revoke",
 }
 
 # JWT 鉴权服务实例（惰性初始化，供中间件使用）
@@ -178,6 +180,25 @@ class AuthMiddleware(BaseHTTPMiddleware):
             auth_service = _get_auth_service()
             try:
                 payload = auth_service.verify_token(token)
+                # P2-4: 黑名单检查（decoded JWT 后检查 jti 是否已吊销）
+                jti = payload.get("jti")
+                if jti:
+                    try:
+                        import aiosqlite
+                        from config import DB_PATH, TOKEN_BLACKLIST_ENABLED
+                        if TOKEN_BLACKLIST_ENABLED:
+                            async with aiosqlite.connect(DB_PATH) as _bl_db:
+                                _bl_db.row_factory = aiosqlite.Row
+                                _row = await _bl_db.execute_fetchone(
+                                    "SELECT 1 FROM token_blacklist WHERE jti = ?", (jti,)
+                                )
+                                if _row:
+                                    return HTMLResponse(
+                                        status_code=401,
+                                        content="<h1>401 Unauthorized</h1><p>令牌已被吊销</p>",
+                                    )
+                    except Exception:  # noqa: BLE001 - 黑名单查询失败时放行（不阻塞服务）
+                        pass
                 request.state.user = payload
                 return await call_next(request)
             except ValueError:
@@ -498,64 +519,72 @@ async def task_websocket(websocket: WebSocket, task_id: str) -> None:
         manager.disconnect(websocket, task_id)
 
 
-# ============ Prometheus 监控端点（差距项 #10） ============
-import time as _time_metrics
+# ============ Prometheus 监控端点（P2-1: 标准化 prometheus_client） ============
+# 优先使用 prometheus_client 标准库，未安装时降级为无操作空实现。
+try:
+    from prometheus_client import make_asgi_app, Counter, Histogram, Gauge
 
-_METRICS: dict[str, float] = {
-    "http_requests_total": 0,
-    "http_errors_total": 0,
-}
-_METRICS_DURATION: dict[str, list[float]] = {
-    "papers_list": [],
-    "papers_detail": [],
-    "search": [],
-    "health": [],
-}
+    _HAS_PROMETHEUS = True
+except ImportError:  # pragma: no cover - 未安装 prometheus-client 时优雅降级
+    _HAS_PROMETHEUS = False
 
+if _HAS_PROMETHEUS:
+    from prometheus_client import CollectorRegistry as _CollectorRegistry
 
-@app.middleware("http")
-async def metrics_middleware(request: Request, call_next: Any) -> Any:
-    """采集 Prometheus 指标。"""
-    global _METRICS
-    _METRICS["http_requests_total"] += 1
-    start = _time_metrics.perf_counter()
-    response = await call_next(request)
-    duration = _time_metrics.perf_counter() - start
-    if response.status_code >= 400:
-        _METRICS["http_errors_total"] += 1
-    # 记录各端点 P50/P99 用
-    path = request.url.path
-    for key in _METRICS_DURATION:
-        if key in path:
-            _METRICS_DURATION[key].append(duration)
-            if len(_METRICS_DURATION[key]) > 1000:
-                _METRICS_DURATION[key] = _METRICS_DURATION[key][-1000:]
-            break
-    return response
+    # 使用独立 registry 避免 importlib.reload 时全局注册表冲突
+    _PROM_REGISTRY = _CollectorRegistry()
 
+    REQUEST_COUNT = Counter(
+        "http_requests_total", "Total HTTP requests",
+        ["method", "endpoint", "status"],
+        registry=_PROM_REGISTRY,
+    )
+    REQUEST_LATENCY = Histogram(
+        "http_request_duration_seconds", "HTTP request latency",
+        ["method", "endpoint"],
+        buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+        registry=_PROM_REGISTRY,
+    )
+    TASK_COUNT = Counter(
+        "celery_tasks_total", "Total Celery tasks",
+        ["task_name", "status"],
+        registry=_PROM_REGISTRY,
+    )
+    ACTIVE_USERS = Gauge(
+        "active_users", "Currently active users",
+        registry=_PROM_REGISTRY,
+    )
 
-@app.get("/metrics")
-async def prometheus_metrics() -> str:
-    """Prometheus 文本格式指标输出。"""
-    lines = [
-        "# HELP http_requests_total Total HTTP requests",
-        "# TYPE http_requests_total counter",
-        f'http_requests_total {_METRICS["http_requests_total"]:.0f}',
-        "",
-        "# HELP http_errors_total Total HTTP errors (4xx/5xx)",
-        "# TYPE http_errors_total counter",
-        f'http_errors_total {_METRICS["http_errors_total"]:.0f}',
-        "",
-    ]
-    # P99 延迟
-    for name, durations in _METRICS_DURATION.items():
-        if durations:
-            sorted_d = sorted(durations)
-            p99 = sorted_d[int(len(sorted_d) * 0.99)]
-            p50 = sorted_d[int(len(sorted_d) * 0.50)]
-            lines.append(f'# HELP http_{name}_duration_seconds Request duration')
-            lines.append(f'# TYPE http_{name}_duration_seconds gauge')
-            lines.append(f'http_{name}_duration_seconds{{quantile="0.5"}} {p50:.4f}')
-            lines.append(f'http_{name}_duration_seconds{{quantile="0.99"}} {p99:.4f}')
-            lines.append("")
-    return "\n".join(lines)
+    # 挂载标准 /metrics 端点（使用同一 registry 确保指标可见）
+    metrics_app = make_asgi_app(registry=_PROM_REGISTRY)
+    app.mount("/metrics", metrics_app)
+
+    # 挂载标准 /metrics 端点（替代自实现）
+    metrics_app = make_asgi_app()
+    app.mount("/metrics", metrics_app)
+
+    @app.middleware("http")
+    async def metrics_middleware(request: Request, call_next: Any) -> Any:
+        """采集 Prometheus 指标（prometheus_client 标准实现）。"""
+        import time as _t
+        method = request.method
+        # 清理路径参数，避免标签爆炸
+        path = request.url.path
+        endpoint = path.split("/")[-1] if path.count("/") <= 3 else "/".join(path.rstrip("/").rsplit("/", 2)[-2:])
+        start = _t.perf_counter()
+        response = await call_next(request)
+        duration = _t.perf_counter() - start
+        REQUEST_COUNT.labels(method=method, endpoint=endpoint, status=str(response.status_code)).inc()
+        REQUEST_LATENCY.labels(method=method, endpoint=endpoint).observe(duration)
+        return response
+else:
+    # 降级：无操作中间件，/metrics 端点返回空（供兼容性检查）
+    @app.middleware("http")
+    async def metrics_middleware(request: Request, call_next: Any) -> Any:  # type: ignore[misc]
+        """降级中间件（prometheus-client 未安装时使用）。"""
+        return await call_next(request)
+
+    @app.get("/metrics")
+    async def prometheus_metrics_fallback() -> str:
+        """降级 /metrics 端点（prometheus-client 未安装时返回空）。"""
+        return "# prometheus-client not installed\n"

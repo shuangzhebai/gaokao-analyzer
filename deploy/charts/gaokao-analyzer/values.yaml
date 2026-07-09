@@ -13,12 +13,14 @@ service:
   port: 8000
 
 ingress:
-  enabled: true
-  className: nginx
-  host: analyzer.example.com
-  tls:
-    enabled: true
-    secretName: gaokao-analyzer-tls
+  enabled: false
+  className: ""
+  annotations: {}
+  host: gaokao-analyzer.example.com
+
+config:
+  corsOrigins: "http://localhost:8000"
+  irtPreheat: "true"
 
 resources:
   limits:

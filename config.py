@@ -387,6 +387,11 @@ else:
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "1440"))  # 24h
 
+# JWT 刷新/吊销配置（P2-4）
+JWT_REFRESH_EXPIRE_DAYS = int(os.environ.get("JWT_REFRESH_EXPIRE_DAYS", "7"))
+JWT_REFRESH_SECRET = os.environ.get("JWT_REFRESH_SECRET", JWT_SECRET)  # 默认复用，可独立设置
+TOKEN_BLACKLIST_ENABLED = os.environ.get("TOKEN_BLACKLIST_ENABLED", "true").lower() == "true"
+
 # 拟合分析权重
 FIT_WEIGHTS = {
     "knowledge_coverage": 0.25,

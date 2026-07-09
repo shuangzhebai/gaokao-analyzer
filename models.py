@@ -14,7 +14,7 @@ logger = logging.getLogger("gaokao")
 # ============ 版本化迁移（T01：防清空数据） ============
 
 # 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
-CURRENT_SCHEMA_VERSION = 7
+CURRENT_SCHEMA_VERSION = 8
 
 
 async def _ensure_schema_migrations(db: Any) -> None:
@@ -251,6 +251,21 @@ async def _migrate_to_v7(db: Any) -> None:
     )""")
 
 
+async def _migrate_to_v8(db: Any) -> None:
+    """阶段八迁移 v8（P2-4）：JWT token 黑名单表。"""
+    await db.execute("""CREATE TABLE IF NOT EXISTS token_blacklist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        jti TEXT NOT NULL UNIQUE,
+        token_type TEXT DEFAULT 'access',
+        user_id INTEGER NOT NULL,
+        revoked_at TEXT DEFAULT (datetime('now')),
+        expires_at TEXT NOT NULL,
+        tenant_id TEXT
+    )""")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_token_blacklist_jti ON token_blacklist(jti)")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires ON token_blacklist(expires_at)")
+
+
 # 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
 MIGRATIONS = {
     1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
@@ -260,6 +275,7 @@ MIGRATIONS = {
     5: ("phase5: 多租户 tenant_id 字段（papers + users）", _migrate_to_v5),
     6: ("phase6: 新增 webhooks 表", _migrate_to_v6),
     7: ("phase7: v6.0 新表 — 题型分类/错题库/学生画像/组卷模板与记录", _migrate_to_v7),
+    8: ("phase8: P2-4 JWT token 黑名单表", _migrate_to_v8),
 }
 
 
@@ -725,6 +741,19 @@ CREATE TABLE IF NOT EXISTS composition_records (
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (template_id) REFERENCES paper_templates(id)
 );
+
+-- v8 (P2-4): JWT token 黑名单表
+CREATE TABLE IF NOT EXISTS token_blacklist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    jti TEXT NOT NULL UNIQUE,
+    token_type TEXT DEFAULT 'access',
+    user_id INTEGER NOT NULL,
+    revoked_at TEXT DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    tenant_id TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_token_blacklist_jti ON token_blacklist(jti);
+CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires ON token_blacklist(expires_at);
 """
 
 

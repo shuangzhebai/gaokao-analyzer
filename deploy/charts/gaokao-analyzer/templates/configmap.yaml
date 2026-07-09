@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "gaokao-analyzer.fullname" . }}-config
+  labels:
+    {{- include "gaokao-analyzer.labels" . | nindent 4 }}
+data:
+  GAOKAO_ENV: "prod"
+  CORS_ORIGINS: {{ .Values.config.corsOrigins | quote }}
+  IRT_PREHEAT: {{ .Values.config.irtPreheat | quote }}
