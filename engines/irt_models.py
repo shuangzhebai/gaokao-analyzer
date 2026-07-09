@@ -372,3 +372,114 @@ def create_model(model_type: str, n_categories: int = 5) -> Any:
     else:
         from analyzer import IRTModel
         return IRTModel()
+
+
+# ============ IRT 参数缓存接口 ============
+
+# 缓存键前缀
+_IRT_CACHE_PREFIX = "irt_params:"
+_cache_service_instance: Any = None
+
+
+async def _get_cache() -> Any:
+    """惰性获取 CacheService 实例。"""
+    global _cache_service_instance
+    if _cache_service_instance is None:
+        try:
+            from services.cache_service import get_cache
+            _cache_service_instance = get_cache()
+        except (ImportError, RuntimeError):
+            # CacheService 未初始化时返回 None
+            return None
+    return _cache_service_instance
+
+
+async def get_cached_params(question_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """批量从缓存读取 IRT 参数。
+
+    Args:
+        question_ids: 题目 ID 列表
+
+    Returns:
+        dict: {question_id: {a, b, c, reliability, cfi, tli, rmsea, ...}}
+    """
+    cache = await _get_cache()
+    if cache is None:
+        return {}
+
+    result: dict[int, dict[str, Any]] = {}
+    for qid in question_ids:
+        key = f"{_IRT_CACHE_PREFIX}{qid}"
+        try:
+            raw = await cache.get(key)
+            if raw:
+                import json
+                data = json.loads(raw) if isinstance(raw, str) else raw
+                result[qid] = data  # type: ignore[arg-type]
+        except Exception:
+            continue
+    return result
+
+
+async def set_cached_params(question_id: int, params: dict[str, Any]) -> None:
+    """写入 IRT 参数缓存。
+
+    Args:
+        question_id: 题目 ID
+        params: IRT 参数字典 {a, b, c, reliability, cfi, tli, rmsea, ...}
+    """
+    cache = await _get_cache()
+    if cache is None:
+        return
+
+    key = f"{_IRT_CACHE_PREFIX}{question_id}"
+    try:
+        await cache.set(key, params, ttl=86400)  # 24h 过期
+    except Exception as e:
+        logger.warning("set_cached_params(%d) 失败: %s", question_id, e)
+
+
+async def precompute_params(question_ids: list[int]) -> dict[int, dict[str, Any]]:
+    """批量预计算 IRT 参数并缓存。
+
+    先查缓存，未命中则调用 IRT 模型估计（占位：需对接实际 IRT 估计流程）。
+
+    Args:
+        question_ids: 题目 ID 列表
+
+    Returns:
+        dict: {question_id: {a, b, c, reliability, ...}}
+    """
+    # 1. 先查缓存
+    cached = await get_cached_params(question_ids)
+    result: dict[int, dict[str, Any]] = dict(cached)
+
+    # 2. 未缓存的题目需要预计算
+    to_compute = [qid for qid in question_ids if qid not in result]
+    if not to_compute:
+        return result
+
+    # 3. 实际 IRT 参数估计（占位 — 后续对接 IRT 引擎的真实 MLE/EM 估计流程）
+    # 当前返回基础默认值，生产环境需要替换为真实的参数估计逻辑
+    import json
+
+    default_params: dict[str, Any] = {
+        "a": 1.0,
+        "b": 0.0,
+        "c": 0.0,
+        "reliability": 0.8,
+        "cfi": 0.95,
+        "tli": 0.93,
+        "rmsea": 0.05,
+        "source": "precompute_placeholder",
+    }
+
+    for qid in to_compute:
+        result[qid] = dict(default_params)
+        try:
+            await set_cached_params(qid, result[qid])
+        except Exception as e:
+            logger.warning("precompute_params: set_cached(%d) 失败: %s", qid, e)
+
+    logger.info("precompute_params: %d 个题目已预计算（含缓存命中）", len(result))
+    return result
