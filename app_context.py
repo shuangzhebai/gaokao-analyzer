@@ -11,7 +11,7 @@ import os
 import sys
 from typing import Any
 
-from config import VERSION, DATA_DIR, DB_PATH, get_deepseek_key
+from config import VERSION, DATA_DIR, DB_PATH, get_deepseek_key, GAOKAO_ENV, CORS_ORIGINS
 
 
 @dataclass(frozen=True)
@@ -61,8 +61,8 @@ def build_app_context(app: Any) -> AppContext:
         data_dir=DATA_DIR,
         db_path=DB_PATH,
         deepseek_enabled=bool(get_deepseek_key()),
-        cors_origins=os.environ.get("CORS_ORIGINS", "*"),
-        env=os.environ.get("GAOKAO_ENV", "dev"),
+        cors_origins=", ".join(CORS_ORIGINS) if CORS_ORIGINS else "(deny-all)",
+        env=GAOKAO_ENV,
         started_at=datetime.now(timezone.utc).isoformat(),
         engine_count=len(engine_attrs),
     )

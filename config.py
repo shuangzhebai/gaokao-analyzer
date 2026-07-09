@@ -3,6 +3,7 @@
 v6.0: WAL模式数据库优化, MEILISEARCH配置, REDIS/CELERY配置, 运行时可调整权重
 """
 import os
+import secrets
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -337,8 +338,52 @@ CALIBRATION_DATA = {
     },
 }
 
+# ===== 运行环境标识 (P0 安全三连修复) =====
+# GAOKAO_ENV: dev(默认, 本地便利) | prod(生产强制安全)
+GAOKAO_ENV = os.environ.get("GAOKAO_ENV", "dev").lower()
+
+# ===== CORS 跨域来源白名单 (P0-3) =====
+# 读取 CORS_ORIGINS 环境变量（逗号分隔白名单）。
+# - 显式设置：使用其值（应为具体来源；禁止 "*" 通配符与凭证共存）。
+# - 未设置：
+#     * prod  → 默认 []，拒绝一切跨域（安全默认）。
+#     * dev   → 本地便利：允许常见本地前端来源（非通配符，带凭证安全）。
+_CORS_ORIGINS_ENV = os.environ.get("CORS_ORIGINS", "")
+if _CORS_ORIGINS_ENV:
+    CORS_ORIGINS: list[str] = [
+        o.strip() for o in _CORS_ORIGINS_ENV.split(",") if o.strip()
+    ]
+elif GAOKAO_ENV == "prod":
+    CORS_ORIGINS = []  # 生产环境未显式配置跨域白名单 → 默认拒绝一切跨域
+else:
+    # dev 默认：本地前端开发来源（Vite:5173 / CRA:3000 / 直出:8000 及其 127.0.0.1 等价）
+    CORS_ORIGINS = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+    ]
+
 # ===== JWT + RBAC 鉴权配置 (v5.1 T05) =====
-JWT_SECRET = os.environ.get("JWT_SECRET", "change-me-in-production")  # 生产必须修改！
+# P0-1: 严禁使用公开硬编码默认值签名令牌。
+# - prod 且未设置(或仍为默认值) → 启动即 fail-fast，拒绝运行。
+# - dev 且未设置 → 生成临时密钥(重启失效)并打印警告，保障本地可用。
+_JWT_SECRET_ENV = os.environ.get("JWT_SECRET")
+if GAOKAO_ENV == "prod":
+    if not _JWT_SECRET_ENV or _JWT_SECRET_ENV == "change-me-in-production":
+        raise RuntimeError("生产环境必须设置 JWT_SECRET 环境变量")
+    JWT_SECRET = _JWT_SECRET_ENV
+else:
+    if _JWT_SECRET_ENV and _JWT_SECRET_ENV != "change-me-in-production":
+        JWT_SECRET = _JWT_SECRET_ENV
+    else:
+        JWT_SECRET = secrets.token_urlsafe(32)
+        print(
+            "WARNING: 使用临时生成的 JWT_SECRET，重启后失效，请勿用于生产。"
+            "设置 JWT_SECRET 环境变量以固定密钥。"
+        )
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", "1440"))  # 24h
 

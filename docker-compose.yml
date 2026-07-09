@@ -4,11 +4,14 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # 跨域白名单：生产环境建议显式指定来源（逗号分隔），如 https://app.example.com
-      CORS_ORIGINS: "*"
-      # API Key：留空则不启用鉴权（兼容单机使用）
-      API_KEY: ""
-      # 运行环境标识（dev / prod）
+      # 跨域白名单：逗号分隔的具体来源；生产必须显式指定（如 https://app.example.com）。
+      # 留空则生产环境拒绝一切跨域、dev 环境仅允许本地前端来源。禁止使用 "*" 通配符。
+      CORS_ORIGINS: "http://localhost:8000"
+      # API Key：生产环境【必须】设置为强密钥，禁止留空！留空将导致写接口无鉴权。
+      # 以下为占位示例，部署前请替换为强随机值（如 openssl rand -hex 32）。
+      API_KEY: "please-set-a-strong-key-in-prod"
+      # 运行环境标识（dev=本地便利 / prod=生产强制安全）。默认 dev 保持本地可用；
+      # 生产部署请设为 "prod"，届时未设置 JWT_SECRET / API_KEY 将启动失败（fail-fast）。
       GAOKAO_ENV: "dev"
       # 关闭 Python 输出缓冲，便于容器日志实时查看
       PYTHONUNBUFFERED: "1"

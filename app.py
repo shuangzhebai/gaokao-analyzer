@@ -13,7 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from starlette.responses import Response
 
-from config import VERSION
+from config import VERSION, GAOKAO_ENV, CORS_ORIGINS
 from deps import get_auto_scraper, get_audit_service, repo_user
 from errors import global_exception_handler, http_exception_handler
 from lifespan import create_lifespan
@@ -46,17 +46,21 @@ app = FastAPI(
 )
 
 # CORS 中间件（S-5：API 独立部署时跨域受限）
-# T05: 从 CORS_ORIGINS 环境变量读取严格白名单，逗号分隔；未设置时回退通配符
-cors_origins_env = os.environ.get("CORS_ORIGINS", "")
-if cors_origins_env:
-    origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
-else:
-    origins = ["*"]
-    logger.warning("CORS_ORIGINS 未设置，使用通配符 '*' — 生产环境请设置严格白名单")
+# P0-3: 跨域来源来自 config.CORS_ORIGINS（已在 config 中按 GAOKAO_ENV 解析）：
+#   - prod 未配置 → []，拒绝一切跨域；
+#   - dev 未配置  → 本地前端白名单（localhost/127.0.0.1）。
+# allow_credentials 仅在 origins 非空且不含通配符 "*" 时启用，规避 "*+credentials" 安全矛盾。
+_allow_credentials = bool(CORS_ORIGINS) and "*" not in CORS_ORIGINS
+if not CORS_ORIGINS:
+    logger.warning(
+        "CORS_ORIGINS 为空，跨域请求将被全部拒绝（prod 默认安全策略）"
+    )
+elif "*" in CORS_ORIGINS:
+    logger.warning("CORS_ORIGINS 含通配符 '*'，已自动禁用 credentials 以保护凭证")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -119,6 +123,9 @@ app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore
 # ============ 鉴权中间件 ============
 
 API_KEY = os.environ.get("API_KEY", "")
+# P0-2: 生产环境必须配置 API_KEY，否则启动即 fail-fast（避免默认部署写接口全放行）
+if GAOKAO_ENV == "prod" and not API_KEY:
+    raise RuntimeError("生产环境必须设置 API_KEY 环境变量")
 # T05: 扩展豁免路径，包含 v1 路径 + auth 注册/登录
 EXEMPT_PATHS = {
     "/", "/api/health", "/api/v1/health",
@@ -139,12 +146,21 @@ def _get_auth_service() -> AuthService:
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """JWT + API Key 双重鉴权中间件（T05）。
+    """JWT + API Key 双重鉴权中间件（T05，P0-2 加固）。
 
-    1. 优先尝试 JWT 令牌验证（Authorization: Bearer <JWT>）
-    2. JWT 失败时回退 API Key 验证（兼容旧客户端）
-    3. 未设置 API_KEY 且无 JWT 时，跳过鉴权（兼容单机使用）
+    鉴权策略（按 GAOKAO_ENV 区分本地便利与生产强制）：
+    1. 豁免路径（register/login/health）始终不鉴权。
+    2. 携带 Bearer 头：优先校验 JWT，失败回退校验 API Key（兼容旧客户端）；
+       二者皆无效 → 401。
+    3. 无 Bearer 头：
+       - 已设置 API_KEY → 写操作(POST/PUT/DELETE)必须鉴权，否则 401；GET 等放行。
+       - 未设置 API_KEY：
+           * prod  → 生产环境已在导入期 fail-fast，运行期保险拒绝写操作(401)。
+           * dev   → 允许本地无鉴权（便利），仅首次打印一次 WARNING。
     """
+
+    # 类级标志：dev 空 API_KEY 仅警告一次，避免日志刷屏
+    _dev_no_api_key_warned: bool = False
 
     async def dispatch(self, request: Request, call_next: Any) -> Any:
         # 豁免路径不鉴权
@@ -153,6 +169,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         auth = request.headers.get("Authorization", "")
+        is_write = request.method in ("POST", "PUT", "DELETE")
 
         if auth.startswith("Bearer "):
             token = auth[len("Bearer "):]
@@ -166,7 +183,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 # JWT 验证失败，回退 API Key 验证
                 pass
 
-            # API Key 验证
+            # API Key 兼容验证（Bearer <API_KEY>）
             if API_KEY and token == API_KEY:
                 request.state.user = {
                     "sub": 0, "role": "admin", "username": "api-key-user",
@@ -181,13 +198,35 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
         # 无 Bearer token
         if API_KEY:
-            # 检查是否需要鉴权（POST/PUT/DELETE）
-            if request.method in ("POST", "DELETE", "PUT"):
+            # 已配置 API_KEY：写操作必须鉴权，否则 401；GET 等放行
+            if is_write:
                 return HTMLResponse(
                     status_code=401,
                     content="<h1>401 Unauthorized</h1><p>缺少 Authorization 头</p>",
                 )
+            request.state.user = None
+            response = await call_next(request)
+            return response
 
+        # 未配置 API_KEY
+        if GAOKAO_ENV == "prod":
+            # 生产环境已在导入期 fail-fast，此处为保险兜底：写操作一律拒绝
+            if is_write:
+                return HTMLResponse(
+                    status_code=401,
+                    content="<h1>401 Unauthorized</h1><p>生产环境 API_KEY 未配置</p>",
+                )
+            request.state.user = None
+            response = await call_next(request)
+            return response
+
+        # dev 模式：空 API_KEY 允许本地无鉴权（便利），仅警告一次
+        if not AuthMiddleware._dev_no_api_key_warned:
+            AuthMiddleware._dev_no_api_key_warned = True
+            print(
+                "WARNING: 开发模式 API_KEY 为空，接口未鉴权（请勿用于生产）。"
+                "设置 API_KEY 环境变量以启用写接口鉴权。"
+            )
         request.state.user = None
         response = await call_next(request)
         return response
