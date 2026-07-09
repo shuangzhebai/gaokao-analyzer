@@ -44,6 +44,25 @@ def _create_app():
 
         # 自动发现任务模块
         celery.autodiscover_tasks(["tasks"])
+
+        # 注册组卷异步任务
+        @celery.task(bind=True, name="composition.generate", max_retries=3, default_retry_delay=5)
+        def composition_generate(self, constraints: dict) -> dict:
+            """组卷异步任务（Celery worker 中执行）。"""
+            try:
+                from engines.composition_engine import CompositionEngine
+                engine = CompositionEngine()
+                # 从 constraints 中提取候选题目
+                questions = constraints.pop("_candidate_questions", [])
+                result = engine.solve(questions, constraints)
+                quality = engine.precheck_quality(result.question_ids)
+                return {
+                    "status": "completed",
+                    "result": result.to_dict(),
+                    "quality_report": quality,
+                }
+            except Exception as exc:
+                raise self.retry(exc=exc)
     except Exception as e:
         logger.warning("Celery 不可用，异步任务将降级为同步执行: %s", e)
         _HAS_CELERY = False

@@ -367,3 +367,23 @@ class CompositionRecordRepository(BaseRepository):
     async def delete(self, id: int) -> bool:
         cursor = await self.db.execute("DELETE FROM composition_records WHERE id = ?", (id,))
         return cursor.rowcount > 0
+
+    # T04: 组卷专用方法
+    async def create_composition(
+        self, name: str, subject_id: str, created_by: str, constraints_json: str
+    ) -> int:
+        """创建组卷记录。"""
+        cursor = await self.db.execute(
+            "INSERT INTO composition_records (name, subject_id, created_by, constraints_json) VALUES (?, ?, ?, ?)",
+            (name, subject_id, created_by, constraints_json)
+        )
+        return cursor.lastrowid
+
+    async def update_result(
+        self, id: int, question_ids_json: str, quality_report_json: str, status: str
+    ) -> None:
+        """更新组卷结果。"""
+        await self.db.execute(
+            "UPDATE composition_records SET question_ids_json=?, quality_report_json=?, status=? WHERE id=?",
+            (question_ids_json, quality_report_json, status, id)
+        )
