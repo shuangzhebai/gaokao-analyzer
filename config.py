@@ -673,6 +673,30 @@ MEILISEARCH_URL: str = os.environ.get("MEILISEARCH_URL", "http://localhost:7700"
 MEILISEARCH_API_KEY: str = os.environ.get("MEILISEARCH_API_KEY", "")
 
 
+# ===== v6.0 题型分类配置 =====
+QUESTION_TYPE_CONFIG = {
+    "subjects": ["math", "chinese", "english", "physics", "chemistry", "biology", "history", "geography", "politics"],
+    "default_model": "rule_based",  # rule_based | lightgbm
+}
+
+# ===== v6.0 组卷引擎配置 =====
+COMPOSITION_CONFIG = {
+    "max_questions": 50,
+    "timeout_seconds": 10,
+    "default_constraints": {
+        "difficulty_mean": 0.55,
+        "difficulty_std": 0.15,
+        "knowledge_coverage_min": 0.6,
+    },
+}
+
+# ===== v6.0 错题库配置 =====
+ERROR_CONFIG = {
+    "mastery_threshold": 3,        # 连续答对 n 次算掌握
+    "recommend_count": 3,          # 同类推荐数量
+    "error_reasons": ["concept", "careless", "calculation", "strategy", "other"],
+}
+
 # 确保目录存在
 for d in [DATA_DIR, DOWNLOAD_DIR]:
     os.makedirs(d, exist_ok=True)

@@ -18,14 +18,21 @@ _pg_pool: Any = None  # PostgreSQL 连接池（asyncpg 原生池）
 
 async def get_db_backend(db_type: str = "") -> Any:
     """获取数据库连接（自动选择后端）。
-    
+
     Args:
         db_type: "sqlite" | "postgresql" | "" (从环境变量 GAOKAO_DB 读取)
+
+    数据库切换：
+        - 设置环境变量 GAOKAO_DB=postgresql 使用 PostgreSQL
+        - 设置环境变量 GAOKAO_DB=sqlite 使用 SQLite（默认）
+    PostgreSQL 连接池大小：
+        - PG_POOL_MIN_SIZE 环境变量（默认 2）
+        - PG_POOL_MAX_SIZE 环境变量（默认 10）
     """
     global _pg_pool
     if not db_type:
         db_type = os.environ.get("GAOKAO_DB", "sqlite").lower()
-    
+
     if db_type == "postgresql":
         return await _connect_pg()
     return await _connect_sqlite()
@@ -71,7 +78,7 @@ async def _connect_sqlite() -> Any:
 
 
 async def _connect_pg() -> Any:
-    """连接 PostgreSQL（连接池）。"""
+    """连接 PostgreSQL（连接池，池大小可从环境变量配置）。"""
     global _pg_pool
     import asyncpg
 
@@ -79,14 +86,20 @@ async def _connect_pg() -> Any:
         "DATABASE_URL",
         "postgresql://gaokao:gaokao@localhost:5432/gaokao",
     )
+    # 从环境变量读取连接池大小（允许运行时调整）
+    pool_min_size = int(os.environ.get("PG_POOL_MIN_SIZE", "2"))
+    pool_max_size = int(os.environ.get("PG_POOL_MAX_SIZE", "10"))
     if _pg_pool is None:
         _pg_pool = await asyncpg.create_pool(
             pg_url,
-            min_size=2,
-            max_size=10,
+            min_size=pool_min_size,
+            max_size=pool_max_size,
             command_timeout=30,
         )
-        logger.info("PostgreSQL 连接池已创建 (max_size=10, url=%s)", pg_url)
+        logger.info(
+            "PostgreSQL 连接池已创建 (min_size=%d, max_size=%d, url=%s)",
+            pool_min_size, pool_max_size, pg_url,
+        )
 
     conn = await _pg_pool.acquire()
 

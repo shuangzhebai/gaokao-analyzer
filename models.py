@@ -14,7 +14,7 @@ logger = logging.getLogger("gaokao")
 # ============ 版本化迁移（T01：防清空数据） ============
 
 # 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
-CURRENT_SCHEMA_VERSION = 6
+CURRENT_SCHEMA_VERSION = 7
 
 
 async def _ensure_schema_migrations(db: Any) -> None:
@@ -177,6 +177,80 @@ async def _migrate_to_v6(db: Any) -> None:
     await db.execute("CREATE INDEX IF NOT EXISTS idx_webhooks_user ON webhooks(user_id)")
 
 
+async def _migrate_to_v7(db: Any) -> None:
+    """阶段七迁移 v7：v6.0 新表 — 题型分类、错题库、学生画像、组卷模板与记录。"""
+    # 1. question_types 表（题型分类）
+    await db.execute("""CREATE TABLE IF NOT EXISTS question_types (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        subject_id TEXT NOT NULL,
+        main_type TEXT NOT NULL,
+        sub_type TEXT NOT NULL,
+        name_cn TEXT NOT NULL,
+        level INTEGER DEFAULT 1,
+        parent_id INTEGER,
+        FOREIGN KEY (parent_id) REFERENCES question_types(id)
+    )""")
+    # 2. questions 表新增列
+    await _add_column_if_missing(db, "questions", "question_type_id", "INTEGER REFERENCES question_types(id)")
+    await _add_column_if_missing(db, "questions", "irt_params_cache", "TEXT")
+    # 3. error_records 表
+    await db.execute("""CREATE TABLE IF NOT EXISTS error_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        question_id INTEGER NOT NULL,
+        subject_id TEXT NOT NULL,
+        error_reason TEXT DEFAULT 'other',
+        user_score REAL,
+        question_score REAL DEFAULT 0,
+        attempt_count INTEGER DEFAULT 1,
+        is_mastered INTEGER DEFAULT 0,
+        mastered_at TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        tenant_id TEXT,
+        FOREIGN KEY (question_id) REFERENCES questions(id)
+    )""")
+    # 4. student_profiles 表
+    await db.execute("""CREATE TABLE IF NOT EXISTS student_profiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        subject_id TEXT NOT NULL,
+        theta REAL DEFAULT 0.0,
+        theta_se REAL DEFAULT 1.0,
+        knowledge_mastery TEXT DEFAULT '{}',
+        total_questions INTEGER DEFAULT 0,
+        correct_questions INTEGER DEFAULT 0,
+        last_updated TEXT DEFAULT (datetime('now')),
+        tenant_id TEXT,
+        UNIQUE(user_id, subject_id)
+    )""")
+    # 5. paper_templates 表
+    await db.execute("""CREATE TABLE IF NOT EXISTS paper_templates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        subject_id TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        constraints_json TEXT NOT NULL DEFAULT '{}',
+        description TEXT,
+        is_public INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+    )""")
+    # 6. composition_records 表
+    await db.execute("""CREATE TABLE IF NOT EXISTS composition_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        subject_id TEXT NOT NULL,
+        template_id INTEGER,
+        created_by TEXT NOT NULL,
+        constraints_json TEXT NOT NULL DEFAULT '{}',
+        question_ids_json TEXT NOT NULL DEFAULT '[]',
+        quality_report_json TEXT,
+        status TEXT DEFAULT 'draft',
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (template_id) REFERENCES paper_templates(id)
+    )""")
+
+
 # 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
 MIGRATIONS = {
     1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
@@ -185,6 +259,7 @@ MIGRATIONS = {
     4: ("phase4: 新增 users/roles/user_roles 用户与角色表", _migrate_to_v4),
     5: ("phase5: 多租户 tenant_id 字段（papers + users）", _migrate_to_v5),
     6: ("phase6: 新增 webhooks 表", _migrate_to_v6),
+    7: ("phase7: v6.0 新表 — 题型分类/错题库/学生画像/组卷模板与记录", _migrate_to_v7),
 }
 
 
@@ -577,6 +652,78 @@ CREATE TABLE IF NOT EXISTS user_roles (
     PRIMARY KEY (user_id, role_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+);
+
+-- v7: 题型分类表
+CREATE TABLE IF NOT EXISTS question_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject_id TEXT NOT NULL,
+    main_type TEXT NOT NULL,
+    sub_type TEXT NOT NULL,
+    name_cn TEXT NOT NULL,
+    level INTEGER DEFAULT 1,
+    parent_id INTEGER,
+    FOREIGN KEY (parent_id) REFERENCES question_types(id)
+);
+
+-- v7: 错题记录表
+CREATE TABLE IF NOT EXISTS error_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    question_id INTEGER NOT NULL,
+    subject_id TEXT NOT NULL,
+    error_reason TEXT DEFAULT 'other',
+    user_score REAL,
+    question_score REAL DEFAULT 0,
+    attempt_count INTEGER DEFAULT 1,
+    is_mastered INTEGER DEFAULT 0,
+    mastered_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    tenant_id TEXT,
+    FOREIGN KEY (question_id) REFERENCES questions(id)
+);
+
+-- v7: 学生画像表
+CREATE TABLE IF NOT EXISTS student_profiles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    subject_id TEXT NOT NULL,
+    theta REAL DEFAULT 0.0,
+    theta_se REAL DEFAULT 1.0,
+    knowledge_mastery TEXT DEFAULT '{}',
+    total_questions INTEGER DEFAULT 0,
+    correct_questions INTEGER DEFAULT 0,
+    last_updated TEXT DEFAULT (datetime('now')),
+    tenant_id TEXT,
+    UNIQUE(user_id, subject_id)
+);
+
+-- v7: 组卷模板表
+CREATE TABLE IF NOT EXISTS paper_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    constraints_json TEXT NOT NULL DEFAULT '{}',
+    description TEXT,
+    is_public INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- v7: 组卷记录表
+CREATE TABLE IF NOT EXISTS composition_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    template_id INTEGER,
+    created_by TEXT NOT NULL,
+    constraints_json TEXT NOT NULL DEFAULT '{}',
+    question_ids_json TEXT NOT NULL DEFAULT '[]',
+    quality_report_json TEXT,
+    status TEXT DEFAULT 'draft',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (template_id) REFERENCES paper_templates(id)
 );
 """
 
