@@ -21,11 +21,15 @@ services:
       CELERY_RESULT_BACKEND: "redis://redis:6379/1"
       MEILISEARCH_URL: "http://meilisearch:7700"
       MEILISEARCH_API_KEY: "gaokao-analyzer-master-key"
+      # PostgreSQL 连接（GAOKAO_DB=postgresql 时使用）
+      DATABASE_URL: "postgresql://gaokao:gaokao@postgres:5432/gaokao"
+      GAOKAO_DB: "sqlite"  # 改为 postgresql 以启用 PG
     volumes:
       # 数据持久化：镜像内 DB 路径为 /app/data（与 config.DB_PATH=data/gaokao.db 一致）
       - ./data:/app/data
     depends_on:
       - redis
+      - postgres
     restart: unless-stopped
 
   redis:
