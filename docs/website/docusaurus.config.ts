@@ -6,7 +6,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'gaokao-analyzer',
-  tagline: 'IRT 3PL · 蒙特卡洛模拟 · 6维度质量分析 · DeepSeek真实性审核',
+  tagline: '高考教育领域的开源心理测量引擎 + 智能组卷平台 — IRT 3PL/GPCM/GRM · 题型自动分类 · 6维质量诊断 · OR-Tools 智能组卷 · 错题闭环',
   favicon: 'img/favicon.ico',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future

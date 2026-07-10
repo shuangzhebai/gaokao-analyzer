@@ -32,6 +32,9 @@ dist/
 docs/
 !docs/system_design.md
 !docs/archived/
+!docs/website/
+!docs/v6.0-PRD.md
+!docs/v6.0-architecture.md
 .coverage
 .pytest_cache/
 .mypy_cache/
