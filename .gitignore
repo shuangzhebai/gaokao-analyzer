@@ -29,7 +29,13 @@ __pycache__/
 build/
 data/
 dist/
-docs/\n!docs/system_design.md\n!docs/archived/
+docs/
+!docs/system_design.md
+!docs/archived/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.benchmarks/
 env/
 venv/
 verify_v5.ipynb
