@@ -1,0 +1,36 @@
+# gaokao-analyzer 生产部署配置（覆盖 docker-compose.yml）
+# 使用方式：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  web:
+    environment:
+      # 生产模式：启用安全强制检查（JWT_SECRET/API_KEY 缺失则拒绝启动）
+      GAOKAO_ENV: "prod"
+      # 生产数据库：PostgreSQL（需先运行 migration）
+      GAOKAO_DB: "postgresql"
+      # ⚠️ 部署前务必设置以下环境变量或通过 .env 文件注入：
+      # JWT_SECRET: 强随机密钥（openssl rand -hex 32）
+      # API_KEY: 强随机密钥
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  celery_worker:
+    environment:
+      GAOKAO_ENV: "prod"
+      GAOKAO_DB: "postgresql"
+
+  postgres:
+    # 生产环境建议使用托管 PG 服务（RDS/Cloud SQL），而非容器化 PG
+    # 如坚持使用容器 PG，请务必配置：
+    # 1. 定期备份（pg_dump 或 volume snapshot）
+    # 2. 资源限制（deploy.resources）
+    # 3. 健康检查
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gaokao -d gaokao"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

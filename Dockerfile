@@ -6,7 +6,9 @@ WORKDIR /app
 
 # 先复制依赖清单并安装，利用 Docker 层缓存（源码改动不会使该层失效）。
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    # 健康检查依赖 curl
+    apt-get update -qq && apt-get install -y -qq curl && rm -rf /var/lib/apt/lists/*
 
 # 复制应用源码（.venv 已被 .dockerignore 排除）
 COPY . .
