@@ -110,7 +110,7 @@ class XueKeWangAdapter(BaseSourceAdapter):
         zujuan_base = self.config.get("zujuan_base", "")
         if zujuan_base:
             search_key2 = keyword or f"{subject_name}"
-            url = f"{zujuan_base}/search?keyword={search_key2}&grade=year{year}"
+            url = f"{zujuan_base}/search?keyword={search_key2}&grade={year}"
 
         html = self.fetcher.fetch_text(url, extra_headers=self._build_headers())
         if not html:

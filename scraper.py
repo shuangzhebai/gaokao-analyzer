@@ -131,19 +131,24 @@ class Fetcher:
         hi = self.cfg.get("max_delay", 3.0)
         time.sleep(random.uniform(lo, hi))
 
-    def fetch_text(self, url: str, **kwargs) -> Optional[str]:
+    def fetch_text(self, url: str, extra_headers: Optional[dict] = None,
+                   **kwargs) -> Optional[str]:
         """带指数退避重试的 GET，返回文本内容；失败返回 None 并记录日志。
 
         任何异常都被兜底捕获，调用方据此走「部分成功」逻辑，不会整体崩溃。
+        extra_headers：适配器传入的认证/上下文头（如 Cookie/Referer），合并为 headers。
         """
         max_retries = self.cfg.get("max_retries", 3)
         base = self.cfg.get("backoff_base", 2.0)
         cap = self.cfg.get("backoff_max", 30.0)
         last_err: Optional[str] = None
+        req_kwargs: Dict[str, Any] = dict(kwargs)
+        if extra_headers:
+            req_kwargs["headers"] = extra_headers
         for attempt in range(max_retries):
             try:
                 self._rotate_ua()
-                resp = self._client.get(url, **kwargs)
+                resp = self._client.get(url, **req_kwargs)
                 if resp.status_code == 200:
                     return resp.text
                 last_err = f"HTTP {resp.status_code}"
@@ -159,15 +164,19 @@ class Fetcher:
         logger.error("Fetcher 放弃 %s：%s", url, last_err)
         return None
 
-    def fetch_bytes(self, url: str, **kwargs) -> Optional[bytes]:
+    def fetch_bytes(self, url: str, extra_headers: Optional[dict] = None,
+                   **kwargs) -> Optional[bytes]:
         """带指数退避重试的 GET，返回二进制内容（用于下载大文件）。"""
         max_retries = self.cfg.get("max_retries", 3)
         base = self.cfg.get("backoff_base", 2.0)
         cap = self.cfg.get("backoff_max", 30.0)
+        req_kwargs: Dict[str, Any] = dict(kwargs)
+        if extra_headers:
+            req_kwargs["headers"] = extra_headers
         for attempt in range(max_retries):
             try:
                 self._rotate_ua()
-                resp = self._client.get(url, **kwargs)
+                resp = self._client.get(url, **req_kwargs)
                 if resp.status_code == 200:
                     return resp.content
             except Exception as exc:  # noqa: BLE001

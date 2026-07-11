@@ -44,3 +44,8 @@ venv/
 verify_v5.ipynb
 website/build
 /docs/website/node_modules
+
+# 凭据 / 密钥（切勿提交）
+credentials.json
+.env
+.env.local
