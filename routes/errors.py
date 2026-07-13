@@ -17,6 +17,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from services.db_repository import ErrorRepository
 from services.error_service import ErrorService
 from services.student_profile import StudentProfileService
+import json
+from datetime import date, datetime, timedelta
 
 logger = logging.getLogger("gaokao")
 router = APIRouter()
@@ -149,3 +151,130 @@ async def recommend_similar(
 ) -> Any:
     """同类错题推荐。"""
     return await service.recommend_similar(question_id, n=n)
+
+
+# ─── F8 间隔复习 ───
+
+@router.get("/api/v1/errors/review")
+async def get_review_errors(
+    user: dict = Depends(get_current_user),
+    subject_id: str = Query("math"),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """获取今日待复习的错题（按间隔复习算法排序）"""
+    from models import get_db
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+    try:
+        today = datetime.date.today().isoformat()
+        cursor = await db.execute(
+            """SELECT e.*, q.content as question_content
+               FROM error_records e
+               LEFT JOIN questions q ON e.question_id = q.id
+               WHERE e.user_id=? AND e.subject_id=?
+                 AND (e.next_review_at IS NULL OR e.next_review_at <= ?)
+               ORDER BY e.review_priority DESC, e.created_at DESC
+               LIMIT ?""",
+            (user["id"], subject_id, today, limit)
+        )
+        rows = await cursor.fetchall()
+        return {"errors": [dict(r) for r in rows], "count": len(rows)}
+    finally:
+        await db.close()
+
+
+@router.post("/api/v1/errors/review")
+async def review_error(
+    error_id: int,
+    correct: bool,
+    user: dict = Depends(get_current_user),
+):
+    """提交错题复习结果（更新间隔复习计划）"""
+    from models import get_db
+    from services.error_review_service import calculate_next_review, build_review_schedule
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+    try:
+        cursor = await db.execute(
+            "SELECT review_count, review_interval_days FROM error_records WHERE id=? AND user_id=?",
+            (error_id, user["id"])
+        )
+        row = await cursor.fetchone()
+        if not row:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Error record not found")
+
+        review_count = row["review_count"] or 0
+        current_interval = row["review_interval_days"] or 1
+
+        # 计算新的间隔
+        new_interval = calculate_next_review(current_interval, correct)
+        next_review_at = (datetime.datetime.now()
+                          + datetime.timedelta(days=new_interval)).isoformat()
+
+        await db.execute(
+            """UPDATE error_records SET
+               review_count = review_count + 1,
+               review_interval_days = ?,
+               next_review_at = ?,
+               last_reviewed_at = datetime('now')
+               WHERE id=? AND user_id=?""",
+            (new_interval, next_review_at, error_id, user["id"])
+        )
+        await db.commit()
+
+        # 返回完整的复习计划
+        schedule = build_review_schedule(0, review_count + 1)
+        return {
+            "status": "reviewed",
+            "correct": correct,
+            "next_review_at": next_review_at,
+            "review_interval_days": new_interval,
+            "review_count": review_count + 1,
+            "schedule": schedule,
+        }
+    finally:
+        await db.close()
+
+
+@router.get("/api/v1/errors/export")
+async def export_errors(
+    user: dict = Depends(get_current_user),
+    subject_id: str = Query("math"),
+    format: str = Query("json", regex="^(json|csv)$"),
+):
+    """导出错题（JSON/CSV）"""
+    from models import get_db
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+    try:
+        cursor = await db.execute(
+            """SELECT e.*, q.content as question_content
+               FROM error_records e
+               LEFT JOIN questions q ON e.question_id = q.id
+               WHERE e.user_id=? AND e.subject_id=?
+               ORDER BY e.created_at DESC""",
+            (user["id"], subject_id)
+        )
+        rows = await cursor.fetchall()
+        result = [dict(r) for r in rows]
+        for r in result:
+            # 移除敏感字段
+            r.pop("id", None)
+
+        if format == "csv":
+            import csv, io
+            output = io.StringIO()
+            if result:
+                writer = csv.DictWriter(output, fieldnames=result[0].keys())
+                writer.writeheader()
+                writer.writerows(result)
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse(
+                content=output.getvalue(),
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=errors.csv"},
+            )
+        return {"errors": result, "count": len(result)}
+    finally:
+        await db.close()

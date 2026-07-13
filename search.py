@@ -8,6 +8,7 @@ v5.1: 增强中文分词搜索、多关键词 AND/OR、模糊匹配；统一分�
 import json
 import logging
 from typing import Any, Optional
+from config import MEILISEARCH_URL, MEILISEARCH_API_KEY
 
 from models import get_db
 from tokenizer import tokenize
@@ -21,8 +22,8 @@ _meili_client: Any = None
 try:
     import meilisearch as _meili
 
-    _meili_url = __import__("config", fromlist=["MEILISEARCH_URL"]).MEILISEARCH_URL
-    _meili_key = __import__("config", fromlist=["MEILISEARCH_API_KEY"]).MEILISEARCH_API_KEY
+    _meili_url = MEILISEARCH_URL
+    _meili_key = MEILISEARCH_API_KEY
     _meili_client = _meili.Client(_meili_url, _meili_key)
     # 简单连通性测试
     try:

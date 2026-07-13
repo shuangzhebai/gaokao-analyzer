@@ -27,6 +27,7 @@ import edu_source_adapters  # noqa: F401 — 注册 xueke_wang / zujuan_wang 适
 
 from models import get_db
 from routes import analysis, audit, auth, collection, composition, dedup, errors, official_docs, papers, quality, questions, scrape, search, tasks, webhooks
+from routes import agent as agent_routes, learning as learning_routes, assessment as assessment_routes, gamification as gamification_routes, chat as chat_routes, courses as courses_routes, assignments as assignments_routes, dashboard as dashboard_routes, community as community_routes, social as social_routes, reports as reports_routes, sync as sync_routes
 
 # API 速率限制（slowapi）：若运行环境未安装 slowapi，则优雅降级（不启用限速）。
 try:
@@ -467,6 +468,23 @@ app.include_router(quality.router)
 app.include_router(composition.router)
 app.include_router(errors.router)
 app.include_router(collection.router)
+# v7.0 Agent + 学习中心路由
+app.include_router(agent_routes.router)
+app.include_router(learning_routes.router)
+app.include_router(assessment_routes.router)
+# v7.1 游戏化 + 知识图谱
+app.include_router(gamification_routes.router)
+# v7.2 AI助教 + 课程管理 + 作业系统 + 数据看板
+app.include_router(chat_routes.router)
+app.include_router(courses_routes.router)
+app.include_router(assignments_routes.router)
+app.include_router(dashboard_routes.router)
+# v7.2 社区 + 排行榜/通知 + 学习报告
+app.include_router(community_routes.router)
+app.include_router(social_routes.router)
+app.include_router(reports_routes.router)
+# v7.2 多端同步
+app.include_router(sync_routes.router)
 
 
 # ============ WebSocket 任务状态推送（差距项 #7） ============

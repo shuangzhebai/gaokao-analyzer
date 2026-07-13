@@ -1,33 +1,93 @@
-# 贡献指南
+# Contributing to gaokao-analyzer
 
-感谢你考虑为 gaokao-analyzer 做出贡献！
+We love your input! We want to make contributing to gaokao-analyzer as easy and transparent as possible.
 
-## 开发环境
+## Development Process
 
-1. Fork 并克隆仓库
-2. 创建虚拟环境：`python -m venv .venv && source .venv/bin/activate`
-3. 安装依赖：`pip install -r requirements.txt -r requirements-dev.txt`
-4. 安装 pre-commit：`pre-commit install`
+1. Fork the repo and create your branch from `main`
+2. If you've added code, add tests
+3. Ensure the test suite passes
+4. Make sure your code lints
+5. Issue a pull request
 
-## 代码风格
+## Code Style
 
-- 使用 `ruff` 做 lint，`black` 做格式化（line-length=100）
-- 所有公共函数必须有类型注解（mypy strict）
-- 提交前运行：`pre-commit run --all-files`
+- **Python**: We use [Ruff](https://docs.astral.sh/ruff) for linting and formatting
+- **TypeScript**: We use the built-in TS compiler with strict mode
+- **Commit messages**: Use [Conventional Commits](https://www.conventionalcommits.org)
 
-## 提交 PR
+### Setup
 
-1. 从 main 创建新分支：`git checkout -b feat/my-feature`
-2. 编写代码并添加测试
-3. 确保 `pytest tests/ -q` 全部通过
-4. 确保 `mypy --strict app.py` 无错误
-5. 提交并推送：`git push origin feat/my-feature`
-6. 创建 Pull Request 到 main 分支
+```bash
+pip install -r requirements-dev.txt
+pre-commit install
+```
 
-## PR 模板
+### Before committing
 
-请使用 `.github/PULL_REQUEST_TEMPLATE.md` 中的模板。
+```bash
+# Run linting
+ruff check .
+ruff format --check .
 
-## 报告问题
+# Run type checking
+mypy agents/ services/ routes/
 
-使用 Issue 模板：[Bug 报告](.github/ISSUE_TEMPLATE/bug_report.md) | [功能请求](.github/ISSUE_TEMPLATE/feature_request.md)
+# Run tests
+pytest tests/ -v
+```
+
+## Project Structure
+
+```
+gaokao-analyzer/
+├── agents/          # AI Agent implementations (F1-F4)
+│   ├── diagnosis_agent.py    # F1: Learning diagnosis
+│   ├── planning_agent.py     # F2: Study planning
+│   ├── recommendation_agent.py # F3: Exercise recommendation
+│   └── assessment_agent.py   # F4: Assessment agent
+├── services/        # Business logic services
+│   ├── agent_service_adapter.py # Unified Agent-service bridge
+│   └── error_review_service.py  # F8: Spaced repetition
+├── routes/          # API endpoints
+│   ├── agent.py     # Agent orchestration API
+│   ├── learning.py  # Learning center API
+│   └── assessment.py # Assessment API
+├── frontend/        # React + TypeScript frontend
+├── data/            # SQLite database (auto-created)
+├── scripts/         # Utility scripts
+├── tests/           # Test suite
+├── models.py        # Database models & migrations
+├── app.py           # FastAPI application
+└── config.py        # Configuration
+```
+
+## Adding a New Agent
+
+1. Create a new agent class in `agents/`
+2. Optionally add FC tool services in `services/agents/`
+3. Register the agent in `routes/agent.py`'s `get_orchestrator()`
+4. Add state handler and transition in the orchestrator
+
+## Adding a New API Route
+
+1. Create a new route file in `routes/`
+2. Import and register in `app.py` via `include_router`
+3. Add Pydantic models for request/response validation
+
+## Adding a New Database Migration
+
+1. Add a new `_migrate_to_vN` function in `models.py`
+2. Register it in the `MIGRATIONS` dict
+3. Increment `CURRENT_SCHEMA_VERSION`
+
+## Adding a New Frontend Page
+
+1. Create the page component in `frontend/src/pages/`
+2. Export it from the `index.ts` barrel file
+3. Add a lazy-loaded route in `frontend/src/routes/index.tsx`
+4. Add a sidebar navigation item in `frontend/src/layouts/Sidebar.tsx`
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the MIT License.

@@ -14,7 +14,7 @@ logger = logging.getLogger("gaokao")
 # ============ 版本化迁移（T01：防清空数据） ============
 
 # 当前 schema 版本号。升级时请递增本常量并在 MIGRATIONS 中注册对应迁移函数。
-CURRENT_SCHEMA_VERSION = 9
+CURRENT_SCHEMA_VERSION = 12
 
 
 async def _ensure_schema_migrations(db: Any) -> None:
@@ -284,794 +284,200 @@ async def _migrate_to_v8_5(db: Any) -> None:
     await db.execute("CREATE INDEX IF NOT EXISTS idx_collection_logs_started ON collection_logs(started_at)")
 
 
-# 版本号 -> (描述, 迁移函数)。后续升级只需追加更高版本号即可。
-MIGRATIONS = {
-    1: ("v5.1 baseline: 补齐 v5.x 字段与迁移表", _migrate_to_v1),
-    2: ("phase2: 新增 paper_reports 报告表", _migrate_to_v2),
-    3: ("phase3: 新增 audit_log 操作审计日志表", _migrate_to_v3),
-    4: ("phase4: 新增 users/roles/user_roles 用户与角色表", _migrate_to_v4),
-    5: ("phase5: 多租户 tenant_id 字段（papers + users）", _migrate_to_v5),
-    6: ("phase6: 新增 webhooks 表", _migrate_to_v6),
-    7: ("phase7: v6.0 新表 — 题型分类/错题库/学生画像/组卷模板与记录", _migrate_to_v7),
-    8: ("phase8: P2-4 JWT token 黑名单表", _migrate_to_v8),
-    9: ("phase8.5: 采集日志表 collection_logs", _migrate_to_v8_5),
-}
+async def _migrate_to_v10(db: Any) -> None:
+    """v10: Agent 学习闭环 — 4张新表 + F7/F8 表结构变更"""
+    await db.executescript("""
+        CREATE TABLE IF NOT EXISTS learning_paths (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL, subject_id TEXT NOT NULL,
+            session_id TEXT NOT NULL, plan_json TEXT NOT NULL DEFAULT '{}',
+            status TEXT DEFAULT 'active', progress_pct REAL DEFAULT 0.0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now')),
+            tenant_id TEXT DEFAULT 'default',
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_lp_user_subject ON learning_paths(user_id, subject_id);
+        CREATE INDEX IF NOT EXISTS idx_lp_session ON learning_paths(session_id);
+        CREATE INDEX IF NOT EXISTS idx_lp_status ON learning_paths(status);
+        CREATE TABLE IF NOT EXISTS stage_assessments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+            subject_id TEXT NOT NULL, learning_path_id INTEGER,
+            session_id TEXT NOT NULL, composition_id INTEGER,
+            score REAL, total_score REAL, theta_before REAL, theta_after REAL, theta_shift REAL,
+            weakness_before JSON DEFAULT '[]', weakness_after JSON DEFAULT '[]',
+            weakness_resolved JSON DEFAULT '[]', diagnosis_json TEXT,
+            recommendations JSON DEFAULT '[]', status TEXT DEFAULT 'pending',
+            started_at TEXT, completed_at TEXT, created_at TEXT DEFAULT (datetime('now')),
+            tenant_id TEXT DEFAULT 'default',
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (learning_path_id) REFERENCES learning_paths(id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_sa_user_subject ON stage_assessments(user_id, subject_id);
+        CREATE INDEX IF NOT EXISTS idx_sa_session ON stage_assessments(session_id);
+        CREATE TABLE IF NOT EXISTS textbook_mappings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, subject_id TEXT NOT NULL,
+            textbook_name TEXT NOT NULL, chapter_code TEXT NOT NULL,
+            chapter_name TEXT NOT NULL, section_code TEXT, section_name TEXT,
+            kp_code TEXT NOT NULL, kp_name TEXT NOT NULL,
+            weight REAL DEFAULT 1.0, page_range TEXT, mapping_type TEXT DEFAULT 'chapter',
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (subject_id) REFERENCES subjects(id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tm_unique ON textbook_mappings(subject_id, textbook_name, chapter_code, section_code, kp_code);
+        CREATE TABLE IF NOT EXISTS agent_execution_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL,
+            agent_name TEXT NOT NULL, user_id INTEGER NOT NULL,
+            subject_id TEXT NOT NULL, state_from TEXT, state_to TEXT,
+            model TEXT DEFAULT 'deepseek-chat', prompt_tokens INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0, total_tokens INTEGER DEFAULT 0,
+            latency_ms INTEGER, tool_calls_json TEXT DEFAULT '[]',
+            success INTEGER DEFAULT 1, error_msg TEXT, output_summary TEXT,
+            created_at TEXT DEFAULT (datetime('now')), tenant_id TEXT DEFAULT 'default',
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_ael_session ON agent_execution_logs(session_id);
+        CREATE INDEX IF NOT EXISTS idx_ael_user_agent ON agent_execution_logs(user_id, agent_name);
+        CREATE INDEX IF NOT EXISTS idx_ael_success ON agent_execution_logs(success);
+    """)
 
 
-async def run_migrations(db: Any) -> None:
-    """按版本号增量应用迁移，绝不删除数据库。
-
-    迁移失败会抛出 RuntimeError 并提示用户手动备份重建（而非自动清库）。
-    """
-    await _ensure_schema_migrations(db)
-    current = await _get_applied_version(db)
-    if current >= CURRENT_SCHEMA_VERSION:
-        return
-    for ver in range(current + 1, CURRENT_SCHEMA_VERSION + 1):
-        desc, fn = MIGRATIONS.get(ver, (f"migration to v{ver}", None))
-        try:
-            if fn is not None:
-                await fn(db)
-            await db.execute(
-                "INSERT OR REPLACE INTO schema_migrations (version, description) VALUES (?, ?)",
-                (ver, desc),
-            )
-            await db.commit()
-            logger.info(f"DB migration applied: v{ver} - {desc}")
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"DB migration v{ver} failed: {e}")
-            raise RuntimeError(
-                f"数据库 schema 迁移失败 (目标 v{ver}): {e}。"
-                f"请先备份 data/gaokao.db，再手动重建；不要使用 --reset 以免数据清空。"
-            ) from e
-
-
-async def init_db() -> None:
-    """初始化所有数据表 + FTS5 索引 + 版本化迁移"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.executescript(SCHEMA)
-        await run_migrations(db)
-        await db.commit()
-
-
-from collections.abc import AsyncGenerator
-
-
-async def get_db() -> AsyncGenerator[Any, None]:
-    """获取极致优化的数据库连接（SQLite WAL / PostgreSQL 双后端）。"""
-    from services.db_service import get_db_backend, close_db
-
-    db = await get_db_backend()
+async def _migrate_to_v10_5(db: Any) -> None:
+    """v10.5: F8 error_records复习字段 + F7 knowledge_explanations表"""
+    # F8: error_records 增加间隔复习字段（ALTER TABLE 逐个执行）
     try:
-        yield db
-    finally:
-        await close_db(db)
+        await db.execute("ALTER TABLE error_records ADD COLUMN review_schedule TEXT")
+    except Exception:
+        pass  # 字段已存在
+    try:
+        await db.execute("ALTER TABLE error_records ADD COLUMN next_review_at TEXT")
+    except Exception:
+        pass
+    try:
+        await db.execute("ALTER TABLE error_records ADD COLUMN review_interval_days INTEGER DEFAULT 1")
+    except Exception:
+        pass
+    try:
+        await db.execute("ALTER TABLE error_records ADD COLUMN review_count INTEGER DEFAULT 0")
+    except Exception:
+        pass
+    try:
+        await db.execute("ALTER TABLE error_records ADD COLUMN mastery_at_last_review REAL")
+    except Exception:
+        pass
+    # F7: 知识点讲解模板表
+    await db.execute("""CREATE TABLE IF NOT EXISTS knowledge_explanations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, kp_code TEXT NOT NULL,
+        subject_id TEXT NOT NULL, version TEXT DEFAULT 'v1',
+        concept_summary TEXT NOT NULL, key_difficulty TEXT,
+        example_question_ids TEXT DEFAULT '[]', common_mistakes TEXT,
+        prerequisite_kps TEXT DEFAULT '[]', created_at TEXT DEFAULT (datetime('now'))
+    )""")
+    await db.execute("CREATE INDEX IF NOT EXISTS idx_ke_kp ON knowledge_explanations(kp_code, subject_id)")
 
 
-SCHEMA = """
--- 科目表
-CREATE TABLE IF NOT EXISTS subjects (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    total_score INTEGER NOT NULL DEFAULT 150,
-    time_min INTEGER NOT NULL DEFAULT 120
-);
 
--- 数据源表（增强：增加描述和频率限制）
-CREATE TABLE IF NOT EXISTS sources (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    base_url TEXT,
-    priority TEXT NOT NULL DEFAULT 'B',
-    enabled INTEGER NOT NULL DEFAULT 1,
-    rate_limit INTEGER DEFAULT 3,
-    description TEXT
-);
+async def _migrate_to_v11(db: Any) -> None:
+    """v12: 游戏化激励 + 知识图谱持久化"""
+    await db.executescript("""
+        CREATE TABLE IF NOT EXISTS user_streaks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+            subject_id TEXT NOT NULL, current_streak INTEGER DEFAULT 0,
+            longest_streak INTEGER DEFAULT 0, last_study_date TEXT,
+            total_study_days INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime("now")),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_us_user_subject ON user_streaks(user_id, subject_id);
+        CREATE TABLE IF NOT EXISTS user_achievements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+            achievement_code TEXT NOT NULL, achievement_name TEXT NOT NULL,
+            description TEXT, icon_url TEXT, unlocked_at TEXT DEFAULT (datetime("now")),
+            is_new INTEGER DEFAULT 1,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_ua_user_ach ON user_achievements(user_id, achievement_code);
+        CREATE TABLE IF NOT EXISTS knowledge_graph (
+            kp_code TEXT PRIMARY KEY, kp_name TEXT NOT NULL,
+            subject_id TEXT NOT NULL, prerequisites TEXT DEFAULT "[]",
+            difficulty REAL DEFAULT 0.5, exam_frequency REAL DEFAULT 0.0,
+            cognitive_level TEXT DEFAULT "u57fau7840", importance TEXT DEFAULT "u4e2d",
+            children TEXT DEFAULT "[]", related_kps TEXT DEFAULT "[]"
+        );
+        CREATE INDEX IF NOT EXISTS idx_kg_subject ON knowledge_graph(subject_id);
+    
+        CREATE TABLE IF NOT EXISTS courses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL,
+            description TEXT DEFAULT '', subject_id TEXT NOT NULL,
+            difficulty TEXT DEFAULT 'medium', estimated_hours REAL DEFAULT 0,
+            cover_url TEXT, status TEXT DEFAULT 'draft',
+            created_by INTEGER, created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS course_chapters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, course_id INTEGER NOT NULL,
+            title TEXT NOT NULL, content_type TEXT DEFAULT 'video',
+            content_url TEXT, duration_minutes INTEGER DEFAULT 0,
+            order_index INTEGER DEFAULT 0, kp_codes TEXT DEFAULT '[]',
+            created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS course_enrollments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+            course_id INTEGER NOT NULL, progress_pct REAL DEFAULT 0,
+            enrolled_at TEXT DEFAULT (datetime('now')),
+            completed_at TEXT, FOREIGN KEY (course_id) REFERENCES courses(id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_ce_user_course ON course_enrollments(user_id, course_id);
+        CREATE TABLE IF NOT EXISTS assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL,
+            description TEXT DEFAULT '', course_id INTEGER,
+            subject_id TEXT NOT NULL, questions TEXT DEFAULT '[]',
+            due_at TEXT, created_by INTEGER, status TEXT DEFAULT 'published',
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE TABLE IF NOT EXISTS assignment_submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, assignment_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL, answers TEXT DEFAULT '[]',
+            score REAL DEFAULT 0, total_score REAL DEFAULT 0,
+            status TEXT DEFAULT 'pending', submitted_at TEXT DEFAULT (datetime('now')),
+            graded_at TEXT, grader_id INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS sync_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+            device_id TEXT NOT NULL, data_json TEXT DEFAULT '{}',
+            synced_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_sr_user_device ON sync_records(user_id, device_id);
+    """)
+    await db.commit()
 
--- 试卷表（v4.0 重设计：增加来源追溯、查重标记）
-CREATE TABLE IF NOT EXISTS papers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    subject_id TEXT NOT NULL,
-    paper_type TEXT NOT NULL,
-    year INTEGER NOT NULL DEFAULT 2026,
-    province TEXT,
-    school TEXT,
-    exam_tag TEXT,
-
-    -- 来源追溯
-    source_id TEXT,
-    source_url TEXT,
-    source_priority TEXT DEFAULT 'B',
-    collected_at TIMESTAMP,
-    collector TEXT DEFAULT 'system',
-    verified INTEGER DEFAULT 0,
-    verified_at TIMESTAMP,
-
-    -- 内容
-    file_path TEXT,
-    total_score REAL DEFAULT 150,
-    difficulty REAL,
-    question_count INTEGER DEFAULT 0,
-
-    -- 分析结果
-    quality_score REAL,
-    curriculum_score REAL,
-    analysis_status TEXT DEFAULT 'pending',
-    curriculum_json TEXT,
-    quality_json TEXT,
-    simulation_json TEXT,
-
-    -- 去重标记
-    content_hash TEXT,
-    duplicate_of INTEGER,
-    dedup_status TEXT DEFAULT 'unique',
-
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (subject_id) REFERENCES subjects(id),
-    FOREIGN KEY (source_id) REFERENCES sources(id),
-    FOREIGN KEY (duplicate_of) REFERENCES papers(id)
-);
-
--- 题目表（v4.0 增强：解析字段、难度标签、内容哈希）
-CREATE TABLE IF NOT EXISTS questions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    paper_id INTEGER NOT NULL,
-    q_number INTEGER NOT NULL,
-    q_type TEXT NOT NULL,
-    content TEXT,
-    options TEXT,
-    answer TEXT,
-    explanation TEXT,
-    score REAL NOT NULL DEFAULT 0,
-    knowledge_points TEXT,
-    difficulty_tag TEXT,
-
-    -- IRT 参数
-    irt_a REAL,
-    irt_b REAL,
-    irt_c REAL DEFAULT 0.0,
-    discrimination REAL,
-
-    -- 课标与质量
-    cognitive_level TEXT,
-    core_competency TEXT,
-    quality_rating TEXT,
-    is_quality INTEGER DEFAULT 0,
-
-    -- 去重
-    content_hash TEXT,
-    similar_to INTEGER,
-
-    FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE
-);
-
--- 知识点表
-CREATE TABLE IF NOT EXISTS knowledge_points (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    subject_id TEXT NOT NULL,
-    code TEXT UNIQUE NOT NULL,
-    name TEXT NOT NULL,
-    parent_id INTEGER,
-    level INTEGER NOT NULL DEFAULT 1,
-    weight REAL DEFAULT 1.0,
-    description TEXT,
-    cognitive_requirement TEXT,
-    FOREIGN KEY (subject_id) REFERENCES subjects(id),
-    FOREIGN KEY (parent_id) REFERENCES knowledge_points(id)
-);
-
--- 分析结果表
-CREATE TABLE IF NOT EXISTS analysis_results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    paper_id INTEGER NOT NULL,
-    ref_paper_id INTEGER,
-    fit_score REAL,
-    knowledge_coverage TEXT,
-    difficulty_ks_stat REAL,
-    difficulty_ks_pvalue REAL,
-    question_type_match TEXT,
-    quality_score REAL,
-    curriculum_alignment REAL,
-    simulation_mean REAL,
-    simulation_std REAL,
-    simulation_median REAL,
-    simulation_json TEXT,
-    score_distribution_json TEXT,
-    analysis_json TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE,
-    FOREIGN KEY (ref_paper_id) REFERENCES papers(id)
-);
-
--- 爬取日志表（v4.0 增强：去重结果、响应时间）
-CREATE TABLE IF NOT EXISTS scrape_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_id TEXT,
-    url TEXT,
-    status TEXT NOT NULL,
-    error_msg TEXT,
-    paper_id INTEGER,
-    dedup_result TEXT,
-    response_time_ms INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- 去重记录表（v4.0 新增）
-CREATE TABLE IF NOT EXISTS dedup_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    paper_id_1 INTEGER NOT NULL,
-    paper_id_2 INTEGER NOT NULL,
-    similarity REAL NOT NULL,
-    method TEXT NOT NULL,
-    status TEXT DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (paper_id_1) REFERENCES papers(id),
-    FOREIGN KEY (paper_id_2) REFERENCES papers(id)
-);
-
--- FTS5 试卷全文搜索索引
-CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts USING fts5(
-    title,
-    province,
-    school,
-    exam_tag,
-    content='papers',
-    content_rowid='id'
-);
-
--- FTS5 题目全文搜索索引
-CREATE VIRTUAL TABLE IF NOT EXISTS questions_fts USING fts5(
-    content,
-    knowledge_points,
-    content='questions',
-    content_rowid='id'
-);
-
--- FTS 同步触发器：试卷插入后同步到 FTS
-CREATE TRIGGER IF NOT EXISTS papers_fts_insert AFTER INSERT ON papers BEGIN
-    INSERT INTO papers_fts(rowid, title, province, school, exam_tag)
-    VALUES (new.id, new.title, new.province, new.school, new.exam_tag);
-END;
-
-CREATE TRIGGER IF NOT EXISTS papers_fts_update AFTER UPDATE ON papers BEGIN
-    INSERT INTO papers_fts(papers_fts, rowid, title, province, school, exam_tag)
-    VALUES ('delete', old.id, old.title, old.province, old.school, old.exam_tag);
-    INSERT INTO papers_fts(rowid, title, province, school, exam_tag)
-    VALUES (new.id, new.title, new.province, new.school, new.exam_tag);
-END;
-
-CREATE TRIGGER IF NOT EXISTS papers_fts_delete AFTER DELETE ON papers BEGIN
-    INSERT INTO papers_fts(papers_fts, rowid, title, province, school, exam_tag)
-    VALUES ('delete', old.id, old.title, old.province, old.school, old.exam_tag);
-END;
-
--- FTS 同步触发器：题目插入后同步到 FTS
-CREATE TRIGGER IF NOT EXISTS questions_fts_insert AFTER INSERT ON questions BEGIN
-    INSERT INTO questions_fts(rowid, content, knowledge_points)
-    VALUES (new.id, new.content, new.knowledge_points);
-END;
-
-CREATE TRIGGER IF NOT EXISTS questions_fts_update AFTER UPDATE ON questions BEGIN
-    INSERT INTO questions_fts(questions_fts, rowid, content, knowledge_points)
-    VALUES ('delete', old.id, old.content, old.knowledge_points);
-    INSERT INTO questions_fts(rowid, content, knowledge_points)
-    VALUES (new.id, new.content, new.knowledge_points);
-END;
-
-CREATE TRIGGER IF NOT EXISTS questions_fts_delete AFTER DELETE ON questions BEGIN
-    INSERT INTO questions_fts(questions_fts, rowid, content, knowledge_points)
-    VALUES ('delete', old.id, old.content, old.knowledge_points);
-END;
-
--- 索引
-CREATE INDEX IF NOT EXISTS idx_papers_subject ON papers(subject_id);
-CREATE INDEX IF NOT EXISTS idx_papers_type ON papers(paper_type);
-CREATE INDEX IF NOT EXISTS idx_papers_year ON papers(year);
-CREATE INDEX IF NOT EXISTS idx_papers_province ON papers(province);
-CREATE INDEX IF NOT EXISTS idx_papers_source_priority ON papers(source_priority);
-CREATE INDEX IF NOT EXISTS idx_papers_content_hash ON papers(content_hash);
-CREATE INDEX IF NOT EXISTS idx_papers_dedup ON papers(dedup_status);
-CREATE INDEX IF NOT EXISTS idx_papers_exam_tag ON papers(exam_tag);
-CREATE INDEX IF NOT EXISTS idx_papers_composite ON papers(subject_id, year, paper_type);
-CREATE INDEX IF NOT EXISTS idx_questions_paper ON questions(paper_id);
-CREATE INDEX IF NOT EXISTS idx_questions_quality ON questions(is_quality);
-CREATE INDEX IF NOT EXISTS idx_questions_hash ON questions(content_hash);
-CREATE INDEX IF NOT EXISTS idx_kp_subject ON knowledge_points(subject_id);
-CREATE INDEX IF NOT EXISTS idx_analysis_paper ON analysis_results(paper_id);
-CREATE INDEX IF NOT EXISTS idx_scrape_status ON scrape_logs(status, created_at);
-CREATE INDEX IF NOT EXISTS idx_dedup_papers ON dedup_records(paper_id_1, paper_id_2);
-
--- v5.0: 官方文件库表
-CREATE TABLE IF NOT EXISTS official_docs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    category TEXT NOT NULL,
-    source TEXT NOT NULL,
-    source_url TEXT,
-    priority TEXT NOT NULL DEFAULT 'S',
-    year INTEGER,
-    summary TEXT,
-    content TEXT,
-    file_path TEXT,
-    content_hash TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- v5.0: 真实性审核记录表
-CREATE TABLE IF NOT EXISTS verification_audit (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    paper_id INTEGER NOT NULL,
-    audit_type TEXT NOT NULL DEFAULT 'full',
-    score INTEGER DEFAULT 100,
-    grade TEXT DEFAULT 'A',
-    status TEXT DEFAULT 'verified',
-    issues_json TEXT,
-    audited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    auditor TEXT DEFAULT 'system',
-    FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE
-);
-
--- v5.0 索引
-CREATE INDEX IF NOT EXISTS idx_official_docs_category ON official_docs(category);
-CREATE INDEX IF NOT EXISTS idx_official_docs_source ON official_docs(source);
-CREATE INDEX IF NOT EXISTS idx_official_docs_year ON official_docs(year);
-CREATE INDEX IF NOT EXISTS idx_verification_paper ON verification_audit(paper_id);
-CREATE INDEX IF NOT EXISTS idx_verification_grade ON verification_audit(grade);
-
--- v5.1: 版本化迁移记录表（防清空数据，增量 ALTER 不删库）
-CREATE TABLE IF NOT EXISTS schema_migrations (
-    version INTEGER PRIMARY KEY,
-    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    description TEXT
-);
-
--- 阶段二：试卷分析报告表（独立表，便于查询；不污染 papers 主表）
-CREATE TABLE IF NOT EXISTS paper_reports (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    paper_id INTEGER NOT NULL,
-    report_json TEXT,
-    composite_score REAL,
-    grade TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (paper_id) REFERENCES papers(id) ON DELETE CASCADE
-);
-
-CREATE INDEX IF NOT EXISTS idx_paper_reports_paper ON paper_reports(paper_id);
-
--- v3: 操作审计日志（与 verification_audit 试卷真实性审核完全独立）
-CREATE TABLE IF NOT EXISTS audit_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user TEXT NOT NULL DEFAULT 'anonymous',
-    action TEXT NOT NULL,            -- POST / PUT / DELETE
-    resource_type TEXT NOT NULL,     -- 'paper', 'question', 'analysis', 'user', etc.
-    resource_id TEXT,                -- 被操作资源的 ID（字符串兼容）
-    ip_address TEXT,
-    user_agent TEXT,
-    detail TEXT,                     -- JSON 格式额外上下文
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_audit_log_user ON audit_log(user);
-CREATE INDEX IF NOT EXISTS idx_audit_log_resource ON audit_log(resource_type, resource_id);
-CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
-
--- v4: 用户与角色表
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    email TEXT,
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS roles (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    priority INTEGER DEFAULT 0
-);
-
-INSERT OR IGNORE INTO roles (id, name, description, priority) VALUES
-    ('admin', '管理员', '系统管理员，拥有所有权限', 0),
-    ('teacher', '教师', '可以上传、分析、查看试卷', 1),
-    ('viewer', '查看者', '仅可查看和搜索', 2);
-
-CREATE TABLE IF NOT EXISTS user_roles (
-    user_id INTEGER NOT NULL,
-    role_id TEXT NOT NULL,
-    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, role_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
-);
-
--- v7: 题型分类表
-CREATE TABLE IF NOT EXISTS question_types (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    subject_id TEXT NOT NULL,
-    main_type TEXT NOT NULL,
-    sub_type TEXT NOT NULL,
-    name_cn TEXT NOT NULL,
-    level INTEGER DEFAULT 1,
-    parent_id INTEGER,
-    FOREIGN KEY (parent_id) REFERENCES question_types(id)
-);
-
--- v7: 错题记录表
-CREATE TABLE IF NOT EXISTS error_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    question_id INTEGER NOT NULL,
-    subject_id TEXT NOT NULL,
-    error_reason TEXT DEFAULT 'other',
-    user_score REAL,
-    question_score REAL DEFAULT 0,
-    attempt_count INTEGER DEFAULT 1,
-    is_mastered INTEGER DEFAULT 0,
-    mastered_at TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    tenant_id TEXT,
-    FOREIGN KEY (question_id) REFERENCES questions(id)
-);
-
--- v7: 学生画像表
-CREATE TABLE IF NOT EXISTS student_profiles (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    subject_id TEXT NOT NULL,
-    theta REAL DEFAULT 0.0,
-    theta_se REAL DEFAULT 1.0,
-    knowledge_mastery TEXT DEFAULT '{}',
-    total_questions INTEGER DEFAULT 0,
-    correct_questions INTEGER DEFAULT 0,
-    last_updated TEXT DEFAULT (datetime('now')),
-    tenant_id TEXT,
-    UNIQUE(user_id, subject_id)
-);
-
--- v7: 组卷模板表
-CREATE TABLE IF NOT EXISTS paper_templates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    subject_id TEXT NOT NULL,
-    created_by TEXT NOT NULL,
-    constraints_json TEXT NOT NULL DEFAULT '{}',
-    description TEXT,
-    is_public INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-);
-
--- v7: 组卷记录表
-CREATE TABLE IF NOT EXISTS composition_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    subject_id TEXT NOT NULL,
-    template_id INTEGER,
-    created_by TEXT NOT NULL,
-    constraints_json TEXT NOT NULL DEFAULT '{}',
-    question_ids_json TEXT NOT NULL DEFAULT '[]',
-    quality_report_json TEXT,
-    status TEXT DEFAULT 'draft',
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (template_id) REFERENCES paper_templates(id)
-);
-
--- v8 (P2-4): JWT token 黑名单表
-CREATE TABLE IF NOT EXISTS token_blacklist (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    jti TEXT NOT NULL UNIQUE,
-    token_type TEXT DEFAULT 'access',
-    user_id INTEGER NOT NULL,
-    revoked_at TEXT DEFAULT (datetime('now')),
-    expires_at TEXT NOT NULL,
-    tenant_id TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_token_blacklist_jti ON token_blacklist(jti);
-CREATE INDEX IF NOT EXISTS idx_token_blacklist_expires ON token_blacklist(expires_at);
-
--- v8.5: 采集日志表
-CREATE TABLE IF NOT EXISTS collection_logs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source TEXT NOT NULL,
-    task_type TEXT DEFAULT 'scheduled',
-    started_at TEXT,
-    completed_at TEXT,
-    papers_found INTEGER DEFAULT 0,
-    papers_new INTEGER DEFAULT 0,
-    questions_new INTEGER DEFAULT 0,
-    errors TEXT DEFAULT '[]',
-    status TEXT DEFAULT 'running'
-);
-CREATE INDEX IF NOT EXISTS idx_collection_logs_status ON collection_logs(status);
-CREATE INDEX IF NOT EXISTS idx_collection_logs_started ON collection_logs(started_at);
-"""
-
-
-# 新课标九科知识点种子数据
-KNOWLEDGE_SEED = {
-    "chinese": [
-        ("1.1", "语言文字运用", None, 1),
-        ("1.1.1", "现代汉语读音", "1.1", 2),
-        ("1.1.2", "现代汉语字形", "1.1", 2),
-        ("1.1.3", "词语运用", "1.1", 2),
-        ("1.1.4", "病句辨析", "1.1", 2),
-        ("1.1.5", "修辞手法", "1.1", 2),
-        ("1.1.6", "语言连贯", "1.1", 2),
-        ("1.2", "古代诗文阅读", None, 1),
-        ("1.2.1", "文言文阅读", "1.2", 2),
-        ("1.2.2", "古代诗歌鉴赏", "1.2", 2),
-        ("1.2.3", "名篇名句默写", "1.2", 2),
-        ("1.3", "现代文阅读", None, 1),
-        ("1.3.1", "论述类文本阅读", "1.3", 2),
-        ("1.3.2", "文学类文本阅读", "1.3", 2),
-        ("1.3.3", "实用类文本阅读", "1.3", 2),
-        ("1.4", "写作", None, 1),
-        ("1.4.1", "材料作文", "1.4", 2),
-        ("1.4.2", "命题作文", "1.4", 2),
-        ("1.4.3", "任务驱动型作文", "1.4", 2),
-    ],
-    "math": [
-        ("2.1", "集合与常用逻辑用语", None, 1),
-        ("2.1.1", "集合的概念与运算", "2.1", 2),
-        ("2.1.2", "充分条件与必要条件", "2.1", 2),
-        ("2.2", "函数", None, 1),
-        ("2.2.1", "函数的概念与性质", "2.2", 2),
-        ("2.2.2", "基本初等函数", "2.2", 2),
-        ("2.2.3", "函数与方程", "2.2", 2),
-        ("2.3", "导数及其应用", None, 1),
-        ("2.3.1", "导数的概念与运算", "2.3", 2),
-        ("2.3.2", "导数在函数中的应用", "2.3", 2),
-        ("2.3.3", "定积分", "2.3", 2),
-        ("2.4", "三角函数", None, 1),
-        ("2.4.1", "三角函数的概念与图像", "2.4", 2),
-        ("2.4.2", "三角恒等变换", "2.4", 2),
-        ("2.4.3", "解三角形", "2.4", 2),
-        ("2.5", "数列", None, 1),
-        ("2.5.1", "等差数列与等比数列", "2.5", 2),
-        ("2.5.2", "数列求和", "2.5", 2),
-        ("2.5.3", "数学归纳法", "2.5", 2),
-        ("2.6", "不等式", None, 1),
-        ("2.6.1", "基本不等式", "2.6", 2),
-        ("2.6.2", "线性规划", "2.6", 2),
-        ("2.7", "立体几何", None, 1),
-        ("2.7.1", "空间几何体", "2.7", 2),
-        ("2.7.2", "点线面位置关系", "2.7", 2),
-        ("2.7.3", "空间向量与立体几何", "2.7", 2),
-        ("2.8", "解析几何", None, 1),
-        ("2.8.1", "直线与圆", "2.8", 2),
-        ("2.8.2", "圆锥曲线", "2.8", 2),
-        ("2.8.3", "参数方程与极坐标", "2.8", 2),
-        ("2.9", "概率与统计", None, 1),
-        ("2.9.1", "随机事件与概率", "2.9", 2),
-        ("2.9.2", "统计与统计案例", "2.9", 2),
-        ("2.9.3", "二项式定理", "2.9", 2),
-        ("2.9.4", "随机变量及其分布", "2.9", 2),
-        ("2.10", "向量", None, 1),
-        ("2.10.1", "平面向量", "2.10", 2),
-        ("2.10.2", "复数", "2.10", 2),
-    ],
-    "english": [
-        ("3.1", "听力", None, 1),
-        ("3.1.1", "短对话理解", "3.1", 2),
-        ("3.1.2", "长对话理解", "3.1", 2),
-        ("3.1.3", "短文理解", "3.1", 2),
-        ("3.2", "阅读理解", None, 1),
-        ("3.2.1", "细节理解题", "3.2", 2),
-        ("3.2.2", "主旨大意题", "3.2", 2),
-        ("3.2.3", "推理判断题", "3.2", 2),
-        ("3.2.4", "词义猜测题", "3.2", 2),
-        ("3.3", "完形填空", None, 1),
-        ("3.4", "语法填空", None, 1),
-        ("3.4.1", "时态语态", "3.4", 2),
-        ("3.4.2", "非谓语动词", "3.4", 2),
-        ("3.4.3", "定语从句", "3.4", 2),
-        ("3.4.4", "名词性从句", "3.4", 2),
-        ("3.4.5", "状语从句", "3.4", 2),
-        ("3.4.6", "特殊句式", "3.4", 2),
-        ("3.5", "写作", None, 1),
-        ("3.5.1", "应用文写作", "3.5", 2),
-        ("3.5.2", "读后续写", "3.5", 2),
-        ("3.5.3", "概要写作", "3.5", 2),
-    ],
-    "physics": [
-        ("4.1", "力学", None, 1),
-        ("4.1.1", "运动学", "4.1", 2),
-        ("4.1.2", "牛顿运动定律", "4.1", 2),
-        ("4.1.3", "曲线运动", "4.1", 2),
-        ("4.1.4", "万有引力与航天", "4.1", 2),
-        ("4.1.5", "功与能", "4.1", 2),
-        ("4.1.6", "动量", "4.1", 2),
-        ("4.2", "电磁学", None, 1),
-        ("4.2.1", "静电场", "4.2", 2),
-        ("4.2.2", "恒定电流", "4.2", 2),
-        ("4.2.3", "磁场", "4.2", 2),
-        ("4.2.4", "电磁感应", "4.2", 2),
-        ("4.2.5", "交变电流", "4.2", 2),
-        ("4.3", "热学", None, 1),
-        ("4.3.1", "分子动理论", "4.3", 2),
-        ("4.3.2", "气体实验定律", "4.3", 2),
-        ("4.3.3", "热力学定律", "4.3", 2),
-        ("4.4", "光学", None, 1),
-        ("4.5", "近代物理", None, 1),
-        ("4.5.1", "原子结构", "4.5", 2),
-        ("4.5.2", "原子核", "4.5", 2),
-        ("4.5.3", "波粒二象性", "4.5", 2),
-        ("4.6", "实验", None, 1),
-    ],
-    "chemistry": [
-        ("5.1", "化学计量", None, 1),
-        ("5.2", "物质结构与性质", None, 1),
-        ("5.2.1", "原子结构", "5.2", 2),
-        ("5.2.2", "分子结构", "5.2", 2),
-        ("5.2.3", "晶体结构", "5.2", 2),
-        ("5.3", "化学反应原理", None, 1),
-        ("5.3.1", "化学反应与能量", "5.3", 2),
-        ("5.3.2", "化学反应速率与化学平衡", "5.3", 2),
-        ("5.3.3", "水溶液中的离子平衡", "5.3", 2),
-        ("5.3.4", "电化学", "5.3", 2),
-        ("5.4", "无机元素及其化合物", None, 1),
-        ("5.4.1", "碱金属", "5.4", 2),
-        ("5.4.2", "卤素", "5.4", 2),
-        ("5.4.3", "氧族元素", "5.4", 2),
-        ("5.4.4", "氮族元素", "5.4", 2),
-        ("5.4.5", "碳族元素", "5.4", 2),
-        ("5.4.6", "过渡元素", "5.4", 2),
-        ("5.5", "有机化学", None, 1),
-        ("5.5.1", "烃", "5.5", 2),
-        ("5.5.2", "烃的衍生物", "5.5", 2),
-        ("5.5.3", "生物大分子", "5.5", 2),
-        ("5.5.4", "有机合成与推断", "5.5", 2),
-        ("5.6", "化学实验", None, 1),
-    ],
-    "biology": [
-        ("6.1", "细胞", None, 1),
-        ("6.1.1", "细胞的分子组成", "6.1", 2),
-        ("6.1.2", "细胞结构", "6.1", 2),
-        ("6.1.3", "细胞的代谢", "6.1", 2),
-        ("6.1.4", "细胞的生命历程", "6.1", 2),
-        ("6.2", "遗传与进化", None, 1),
-        ("6.2.1", "遗传的分子基础", "6.2", 2),
-        ("6.2.2", "基因的传递规律", "6.2", 2),
-        ("6.2.3", "生物的变异", "6.2", 2),
-        ("6.2.4", "生物的进化", "6.2", 2),
-        ("6.3", "稳态与环境", None, 1),
-        ("6.3.1", "植物的激素调节", "6.3", 2),
-        ("6.3.2", "神经与体液调节", "6.3", 2),
-        ("6.3.3", "免疫调节", "6.3", 2),
-        ("6.3.4", "种群与群落", "6.3", 2),
-        ("6.3.5", "生态系统", "6.3", 2),
-        ("6.4", "实验与探究", None, 1),
-    ],
-    "history": [
-        ("7.1", "中国古代史", None, 1),
-        ("7.1.1", "先秦时期", "7.1", 2),
-        ("7.1.2", "秦汉时期", "7.1", 2),
-        ("7.1.3", "魏晋南北朝", "7.1", 2),
-        ("7.1.4", "隋唐时期", "7.1", 2),
-        ("7.1.5", "宋元时期", "7.1", 2),
-        ("7.1.6", "明清时期", "7.1", 2),
-        ("7.2", "中国近代史", None, 1),
-        ("7.2.1", "鸦片战争至甲午战争", "7.2", 2),
-        ("7.2.2", "维新运动与辛亥革命", "7.2", 2),
-        ("7.2.3", "新民主主义革命", "7.2", 2),
-        ("7.2.4", "抗日战争与解放战争", "7.2", 2),
-        ("7.3", "中国现代史", None, 1),
-        ("7.3.1", "社会主义建设", "7.3", 2),
-        ("7.3.2", "改革开放", "7.3", 2),
-        ("7.4", "世界史", None, 1),
-        ("7.4.1", "古代文明", "7.4", 2),
-        ("7.4.2", "近代欧美", "7.4", 2),
-        ("7.4.3", "两次世界大战", "7.4", 2),
-        ("7.4.4", "二战后世界", "7.4", 2),
-    ],
-    "geography": [
-        ("8.1", "自然地理", None, 1),
-        ("8.1.1", "地球与地图", "8.1", 2),
-        ("8.1.2", "大气运动与气候", "8.1", 2),
-        ("8.1.3", "水循环与洋流", "8.1", 2),
-        ("8.1.4", "地壳物质循环", "8.1", 2),
-        ("8.1.5", "自然带", "8.1", 2),
-        ("8.2", "人文地理", None, 1),
-        ("8.2.1", "人口与城市化", "8.2", 2),
-        ("8.2.2", "农业地域类型", "8.2", 2),
-        ("8.2.3", "工业区位", "8.2", 2),
-        ("8.2.4", "交通与通信", "8.2", 2),
-        ("8.2.5", "可持续发展", "8.2", 2),
-        ("8.3", "区域地理", None, 1),
-        ("8.3.1", "中国地理", "8.3", 2),
-        ("8.3.2", "世界地理", "8.3", 2),
-    ],
-    "politics": [
-        ("9.1", "经济生活", None, 1),
-        ("9.1.1", "货币与价格", "9.1", 2),
-        ("9.1.2", "生产与消费", "9.1", 2),
-        ("9.1.3", "收入与分配", "9.1", 2),
-        ("9.1.4", "社会主义市场经济", "9.1", 2),
-        ("9.1.5", "经济全球化", "9.1", 2),
-        ("9.2", "政治生活", None, 1),
-        ("9.2.1", "公民的政治生活", "9.2", 2),
-        ("9.2.2", "政府", "9.2", 2),
-        ("9.2.3", "人大与政党", "9.2", 2),
-        ("9.2.4", "民族与宗教", "9.2", 2),
-        ("9.2.5", "国际社会", "9.2", 2),
-        ("9.3", "文化生活", None, 1),
-        ("9.3.1", "文化传承与创新", "9.3", 2),
-        ("9.3.2", "中华文化与民族精神", "9.3", 2),
-        ("9.3.3", "中国特色社会主义文化", "9.3", 2),
-        ("9.4", "哲学与生活", None, 1),
-        ("9.4.1", "唯物论", "9.4", 2),
-        ("9.4.2", "认识论", "9.4", 2),
-        ("9.4.3", "辩证法", "9.4", 2),
-        ("9.4.4", "唯物史观", "9.4", 2),
-        ("9.4.5", "价值观与人生观", "9.4", 2),
-    ],
-}
-
-
-async def seed_data() -> None:
-    """初始化种子数据：科目、数据源、知识点"""
-    async with aiosqlite.connect(DB_PATH) as db:
-        for sid, info in {
-            "chinese": ("语文", 150, 150),
-            "math": ("数学", 150, 120),
-            "english": ("英语", 150, 120),
-            "physics": ("物理", 100, 75),
-            "chemistry": ("化学", 100, 75),
-            "biology": ("生物", 100, 75),
-            "history": ("历史", 100, 75),
-            "geography": ("地理", 100, 75),
-            "politics": ("政治", 100, 75),
-        }.items():
-            await db.execute(
-                "INSERT OR IGNORE INTO subjects (id, name, total_score, time_min) VALUES (?,?,?,?)",
-                (sid, *info),
-            )
-
-        from config import SOURCES
-        for sid, src_info in SOURCES.items():
-            await db.execute(
-                "INSERT OR IGNORE INTO sources (id, name, base_url, priority, enabled) VALUES (?,?,?,?,?)",
-                (sid, src_info["name"], src_info["base_url"], src_info["priority"], 1 if src_info["enabled"] else 0),
-            )
-
-        for subject_id, kps in KNOWLEDGE_SEED.items():
-            kp_map: dict[str | None, int] = {}
-            for code, name, parent_code, level in kps:
-                parent_id = kp_map.get(parent_code) if parent_code else None
-                cursor = await db.execute(
-                    "INSERT OR IGNORE INTO knowledge_points (subject_id, code, name, parent_id, level) VALUES (?,?,?,?,?)",
-                    (subject_id, code, name, parent_id, level),
-                )
-                kp_id: Any = cursor.lastrowid
-                kp_map[code] = kp_id
-
-        await db.commit()
-
-
-async def optimize_fts(db: Any = None) -> None:
-    """优化 FTS5 索引：合并段、提升搜索精度（P-6）。
-
-    Args:
-        db: 可选的数据库连接；为 None 时内部创建新连接。
-    """
-    tables = ["papers_fts", "questions_fts"]
-    if db is None:
-        async with aiosqlite.connect(DB_PATH) as conn:
-            for table in tables:
-                try:
-                    await conn.execute(f"INSERT INTO {table}({table}) VALUES('optimize')")
-                except Exception:  # noqa: BLE001
-                    pass
-            await conn.commit()
-    else:
-        for table in tables:
-            try:
-                await db.execute(f"INSERT INTO {table}({table}) VALUES('optimize')")
-            except Exception:  # noqa: BLE001
-                pass
-        await db.commit()
+async def _migrate_to_v12(db: Any) -> None:
+    """v12: 社区论坛 + 通知 + 多端同步"""
+    await db.executescript("""
+        CREATE TABLE IF NOT EXISTS forum_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL,
+            content TEXT NOT NULL, subject_id TEXT NOT NULL,
+            tags TEXT DEFAULT '[]', kp_code TEXT, user_id INTEGER NOT NULL,
+            author_name TEXT, answer_count INTEGER DEFAULT 0,
+            view_count INTEGER DEFAULT 0, is_resolved INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_fq_subject ON forum_questions(subject_id);
+        CREATE TABLE IF NOT EXISTS forum_answers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, question_id INTEGER NOT NULL,
+            content TEXT NOT NULL, user_id INTEGER NOT NULL,
+            author_name TEXT, votes INTEGER DEFAULT 0,
+            is_accepted INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (question_id) REFERENCES forum_questions(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fa_question ON forum_answers(question_id);
+        CREATE TABLE IF NOT EXISTS notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+            title TEXT NOT NULL, content TEXT NOT NULL,
+            notification_type TEXT DEFAULT 'system',
+            link TEXT DEFAULT '', is_read INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, is_read);
+    """)

@@ -3,13 +3,18 @@ import { useAuth } from '../hooks/useAuth';
 import { useI18n } from '../hooks/useI18n';
 import {
   Box, List, ListItemButton, ListItemIcon, ListItemText,
-  Typography, Button, Divider,
+  Typography, Button, Divider, ListSubheader,
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import DescriptionIcon from '@mui/icons-material/Description';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
+import SchoolIcon from '@mui/icons-material/School';
+import PsychologyIcon from '@mui/icons-material/Psychology';
+import RouteIcon from '@mui/icons-material/Route';
+import QuizIcon from '@mui/icons-material/Quiz';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 import type { ReactElement } from 'react';
 
 interface NavItem {
@@ -24,6 +29,14 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/collect', labelKey: 'nav.collect', icon: <CloudDownloadIcon /> },
   { path: '/docs', labelKey: 'nav.docs', icon: <LibraryBooksIcon /> },
   { path: '/audit', labelKey: 'nav.audit', icon: <VerifiedUserIcon /> },
+];
+
+const LEARNING_ITEMS: NavItem[] = [
+  { path: '/dashboard/student/learning', labelKey: '学习概览', icon: <SchoolIcon /> },
+  { path: '/dashboard/student/diagnosis', labelKey: '学习诊断', icon: <PsychologyIcon /> },
+  { path: '/dashboard/student/learning-path', labelKey: '学习路径', icon: <RouteIcon /> },
+  { path: '/dashboard/student/exercises', labelKey: '习题推荐', icon: <QuizIcon /> },
+  { path: '/dashboard/student/assessment', labelKey: '阶段测评', icon: <AssignmentIcon /> },
 ];
 
 export default function Sidebar() {
@@ -54,6 +67,25 @@ export default function Sidebar() {
               {item.icon}
             </ListItemIcon>
             <ListItemText primary={t(item.labelKey)} sx={{ '& .MuiListItemText-primary': { fontSize: 14 } }} />
+          </ListItemButton>
+        ))}
+        <Divider sx={{ borderColor: '#333', my: 1 }} />
+        <ListSubheader sx={{ bgcolor: 'transparent', color: '#78716C', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 1, px: 2 }}>
+          学习中心
+        </ListSubheader>
+        {LEARNING_ITEMS.map((item) => (
+          <ListItemButton
+            key={item.path}
+            selected={location.pathname.startsWith(item.path)}
+            onClick={() => navigate(item.path)}
+            sx={{ mx: 1, borderRadius: 1, mb: 0.5,
+              '&.Mui-selected': { bgcolor: 'rgba(37,99,235,0.12)' },
+            }}
+          >
+            <ListItemIcon sx={{ color: location.pathname.startsWith(item.path) ? '#2563EB' : '#a0a0b0', minWidth: 40 }}>
+              {item.icon}
+            </ListItemIcon>
+            <ListItemText primary={item.labelKey} sx={{ '& .MuiListItemText-primary': { fontSize: 13 } }} />
           </ListItemButton>
         ))}
       </List>

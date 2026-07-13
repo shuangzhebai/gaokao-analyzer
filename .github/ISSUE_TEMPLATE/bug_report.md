@@ -1,25 +1,33 @@
 ---
-name: Bug 报告
-about: 创建一个 Bug 报告帮助我们改进
-title: "[Bug] "
+name: Bug Report
+about: Report a bug to help us improve
+title: "[BUG] "
 labels: bug
+assignees: ''
 ---
 
-## 描述 Bug
-清晰简洁地描述这个 bug。
+**Describe the bug**
+A clear and concise description of what the bug is.
 
-## 重现步骤
-1. 调用 API '...'
-2. 传入参数 '....'
-3. 返回错误 '....'
+**To Reproduce**
+Steps to reproduce the behavior:
+1. Run command '...'
+2. Call API endpoint '....'
+3. See error
 
-## 预期行为
-清晰描述你期望发生什么。
+**Expected behavior**
+A clear and concise description of what you expected to happen.
 
-## 环境信息
-- 部署方式：Docker / 本地开发
-- Python 版本：
-- 浏览器（前端相关时）：
+**Environment**
+- OS: [e.g. Windows 11, Ubuntu 22.04]
+- Python version: [e.g. 3.13]
+- Docker version (if applicable):
+- gaokao-analyzer version: [e.g. v7.1.0]
 
-## 附加信息
-日志片段或截图。
+**Additional context**
+Add any other context about the problem here.
+
+**Logs**
+```
+Paste any relevant logs or error messages
+```

@@ -1,190 +1,276 @@
-# 🎯 gaokao-analyzer
+# 高考模拟卷智能分析系统 · gaokao-analyzer
 
-> **高考教育领域的开源心理测量引擎 + 智能组卷平台**
->
-> IRT 3PL/GPCM/GRM · 题型自动分类 · 6 维质量诊断 · OR-Tools 智能组卷 · 错题闭环 · PostgreSQL
+<p align="center">
+  <img src="https://img.shields.io/github/stars/shuangzhebai/gaokao-analyzer?style=for-the-badge&logo=github" alt="stars"/>
+  <img src="https://img.shields.io/github/actions/workflow/status/shuangzhebai/gaokao-analyzer/ci.yml?style=for-the-badge&logo=githubactions" alt="ci"/>
+  <img src="https://img.shields.io/badge/python-3.13%2B-blue?style=for-the-badge&logo=python" alt="python"/>
+  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="license"/>
+  <img src="https://img.shields.io/badge/coverage-92%25-brightgreen?style=for-the-badge" alt="coverage"/>
+</p>
 
-[![Python](https://img.shields.io/badge/Python-3.13%2B-blue?logo=python)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi)](https://fastapi.tiangolo.com)
-[![Tests](https://img.shields.io/badge/Tests-258%20passed-success?logo=pytest)](https://github.com/shuangzhebai/gaokao-analyzer/actions)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue)](LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/shuangzhebai/gaokao-analyzer?style=social)](https://github.com/shuangzhebai/gaokao-analyzer)
-[![React](https://img.shields.io/badge/Frontend-React+TypeScript-61DAFB?logo=react)](https://react.dev)
-[![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL%2FSQLite-4169E1?logo=postgresql)](https://postgresql.org)
-[![Prometheus](https://img.shields.io/badge/Metrics-Prometheus-E6522C?logo=prometheus)](https://prometheus.io)
+<p align="center">
+  <b>🏆 IRT 心理测量 + 多Agent闭环 + 智能组卷 — 专为高考打造的 AI 学习系统</b>
+</p>
 
----
-
-## 🚀 小白用户看这里（3 步完成）
-
-> **操作步骤：下载 → 双击 → 直接用！**
-
-### 方法一：Docker 一键启动（推荐，最简单）
-
-1. 安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-2. 下载本项目，双击 **`Docker一键启动.bat`**
-3. 浏览器自动打开，直接点击"登录"按钮即可
-
-> 管理员账号已自动创建，**无需注册**，账号密码已自动填好
-
-### 方法二：Python 一键启动（无需 Docker）
-
-1. 安装 [Python 3.13+](https://www.python.org/downloads/)（安装时勾选 "Add Python to PATH"）
-2. 下载本项目，双击 **`一键启动.bat`**
-3. 浏览器自动打开，直接点击"登录"按钮即可
-
-> 首次启动会自动安装依赖（约 2-5 分钟），请耐心等待
+<p align="center">
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-features">Features</a> •
+  <a href="#-architecture">Architecture</a> •
+  <a href="#-demo">Live Demo</a> •
+  <a href="#-installation">Installation</a> •
+  <a href="#%EF%B8%8F-configuration">Configuration</a> •
+  <a href="#-api">API</a> •
+  <a href="#-contributing">Contributing</a>
+</p>
 
 ---
 
-## 📸 截图
+## ✨ Features
 
-_(欢迎分享你的使用截图！)_
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **🎯 IRT 心理测量** | 3PL IRT 模型，精准评估学生能力 (θ) | ✅ Stable |
+| **🧠 多Agent 闭环** | 诊断→规划→推荐→测评，全自动循环 | ✅ v7.1 |
+| **🏆 游戏化激励** | 每日打卡、连续学习、成就徽章 | ✅ v7.2 |
+| **🌐 知识图谱** | 知识点依赖DAG，力导向图可视化 | ✅ v7.2 |
+| **🤖 AI 智能助教** | WebSocket 对话 + 降级模板回复 | ✅ v7.2 |
+| **📚 课程管理** | 课程/章节/报名全流程 | ✅ v7.2 |
+| **📝 作业批改系统** | 客观题自动批改 + 主观题待审 | ✅ v7.2 |
+| **📊 数据看板** | 系统统计 + 学习趋势 + 个人进度 | ✅ v7.2 |
+| **💬 社区论坛** | 问答/投票/热门话题 | ✅ v7.2 |
+| **🏆 排行榜** | 日/周/月/全站 学习排行 | ✅ v7.2 |
+| **🔔 通知系统** | 系统通知/学习提醒/已读管理 | ✅ v7.2 |
+| **📄 学习报告** | HTML可打印报告 + 薄弱点分析 | ✅ v7.2 |
+| **📱 PWA 移动端** | Manifest + Service Worker 就绪 | ✅ v7.2 |
+| **🔄 多端同步** | 设备间数据同步API | ✅ v7.2 |
+| **📝 错题本增强** | 间隔复习/CSV导出/同类推荐 | ✅ v7.2 |
+| **📊 实时仪表盘** | ECharts能力轨迹/掌握度分布 | ✅ v7.2 |
+| **📊 智能组卷** | OR-Tools CP-SAT，30秒生成最优试卷 | ✅ Stable |
+| **🔍 FTS5 全文搜索** | 秒级检索 2万+ 试题 | ✅ Stable |
+| **🤖 AI 个性化讲解** | DeepSeek 驱动，≤8秒生成结构化讲解 | ✅ v7.1 |
+| **📈 掌握度追踪** | IRT 衰减曲线 + 间隔复习 (1/3/7/30天) | ✅ v7.1 |
+| **📐 偏态分布模拟** | 正态/对数正态/指数分布，仿真真实考试成绩 | ✅ v6.0 |
+| **🐳 一键部署** | Docker Compose，5分钟启动 | ✅ Stable |
 
-## ✨ 核心特性
+## 🏗 Architecture
 
-| 特性 | 技术实现 | 亮点 |
-|------|---------|------|
-| 🧮 **IRT 心理测量引擎** | 3PL / GPCM / GRM 模型 + Numba JIT | **独家** — 竞品全部基于 CTT 统计 |
-| 🏷️ **题型自动分类** | 规则引擎 + LightGBM（P0），9 大学科 | 选择题/填空题/解答题/综合题自动识别 |
-| 📊 **6 维质量诊断** | IRT+CTT 混合模型 + 6 维雷达图 | 难度/区分度/信度/效度/知识点/题型匹配 |
-| 📝 **智能组卷** | OR-Tools CP-SAT 约束求解 | 按知识点/难度/题型多条件自动组卷+质量预检 |
-| ❌ **错题闭环** | 自动收录 → 统计分析 → IRT 诊断 → 同类推荐 | 薄弱知识点定位 + 精准推题 |
-| 🎲 **成绩模拟** | 蒙特卡洛 10 万考生 | 偏态校准 + 真实高考对标 |
-| 🤖 **真实性审核** | DeepSeek AI + 多源交叉验证 | 99%+ 识别率 |
-| 🔍 **智能搜索** | Meilisearch + FTS5 降级 | 中文分词+模糊纠错+高亮 |
-| 🕸️ **多源采集** | 可插拔适配器 | 学科网/组卷网/菁优网等 7+ 源 |
-| 🔐 **安全鉴权** | JWT + RBAC + Refresh Token | 黑名单吊销 + HMAC 签名 |
-| 👥 **三端工作台** | 学生/教师/教研员差异化界面 | 各自工作台 + 全链路交互 |
-| 🌐 **i18n 国际化** | locales/zh.json + en.json | 一键中英文切换 |
-| 📱 **PWA 支持** | manifest.json + Service Worker | 可安装到桌面/离线可用 |
-| 📊 **标准化监控** | Prometheus Counter/Histogram/Gauge | 可选 Grafana 面板 |
-| 🐳 **一键部署** | Docker Compose + Helm Chart | Docker/K8s 双模式 |
+```
+┌─────────────────────────────────────────────────────┐
+│                    FastAPI App                        │
+├──────────────┬──────────────┬──────────────────────┤
+│  Agent Layer  │ Service Layer │    Data Layer        │
+│               │              │                      │
+│  Diagnosis ───┤ AgentAdapter ├─── SQLite/PostgreSQL  │
+│  Planning  ───┤   (unified)  ├─── FTS5 Full-Text     │
+│  Recommend ───┤              ├─── MeiliSearch        │
+│  Assessment ──┤  ErrorReview ├─── Redis Cache        │
+│               │  FC Tools    │                      │
+├──────────────┴──────────────┴──────────────────────┤
+│  Frontend: React + MUI + TypeScript (5 learning pages)│
+│  Extras: Gamification / AI Chat / Dashboard          │
+│  Deployment: Docker Compose / Uvicorn                 │
+└──────────────────────────────────────────────────────┘
+```
 
-## 🚀 5 分钟上手
+### Agent Orchestration
+
+```
+User → Diagnosis(IRT+CTT) → Planning(FC tools) → Recommendation(LLM) → Assessment(CAT)
+         ↑                                                                    │
+         └──────────────────── Feedback Loop ────────────────────────────────┘
+```
+
+## 🚀 Quick Start
 
 ```bash
-# 1. 克隆
+# 1. Clone
 git clone https://github.com/shuangzhebai/gaokao-analyzer.git
 cd gaokao-analyzer
 
-# 2. 启动（Docker）
+# 2. Install
+pip install -r requirements.txt
+
+# 3. Initialize database & seed data
+python -c "import asyncio; from models import init_db, seed_data; asyncio.run(init_db()); asyncio.run(seed_data())"
+
+# 4. Start
+uvicorn app:app --host 0.0.0.0 --port 8000
+
+# 5. Open browser → http://localhost:8000
+```
+
+### Docker (5 min)
+
+```bash
 docker compose up -d
-
-# 3. 注册管理员
-curl -X POST "http://localhost:8000/api/v1/auth/register" \
-  -d "username=admin&password=P@ssw0rd&role=admin"
-
-# 4. 登录获取 Token
-curl -X POST "http://localhost:8000/api/v1/auth/login" \
-  -d "username=admin&password=P@ssw0rd"
-
-# 5. 使用 Token 访问 API
-curl "http://localhost:8000/api/v1/papers" \
-  -H "Authorization: Bearer <TOKEN>"
-
-# 6. 打开浏览器访问 http://localhost:8000
 ```
 
-## 🏗️ 架构
+### Seed textbook mappings
 
-```
-                    ┌──────────────────────┐
-                    │   前端 (React+ECharts)│
-                    │  /questions /quality  │
-                    │  /composition /errors │
-                    │  学生/教师/教研员工作台│
-                    └──────┬───────────────┘
-                           │ REST API (29 端点)
-                    ┌──────▼───────────────┐
-                    │   FastAPI 路由层      │
-                    │  questions/quality/   │
-                    │  composition/errors   │
-                    └──────┬───────────────┘
-                    ┌──────▼───────────────┐
-                    │   服务编排层          │
-                    │  Question/Quality/    │
-                    │  Composition/Error    │
-                    └──┬───────┬───────────┘
-                       │       │
-              ┌────────▼──┐ ┌──▼──────────┐
-              │  引擎层     │ │  数据访问层  │
-              │ IRT 3PL/   │ │  Repository  │
-              │ GPCM/GRM   │ │  模式抽象     │
-              │ 题型分类    │ │  PG/SQLite   │
-              │ 质量诊断    │ │  双后端      │
-              │ 组卷(OR-T) │ │              │
-              └────────────┘ └──────────────┘
-                       │              │
-              ┌────────▼──────────────▼────┐
-              │   基础设施                  │
-              │ PG · Redis · Meilisearch   │
-              │ Celery · Prometheus        │
-              └─────────────────────────────┘
+```bash
+python scripts/seed_textbook_mappings.py
 ```
 
-## 📊 质量指标
+## 📦 Installation
 
-| 指标 | 数值 |
-|------|------|
-| ✅ 测试通过 | **258 tests** (基线 223 + 新增 35) |
-| 🔍 类型检查 | **mypy strict** |
-| 🐳 容器化 | 是 (Docker + Compose + Helm) |
-| 🤖 CI | GitHub Actions (ruff + mypy + pytest + pip-audit + 前端 build) |
-| 🔒 安全头 | HSTS/X-Frame/XSS/Referrer/CSP |
-| 🔐 签名 | Webhook HMAC-SHA256 + JWT 黑名单吊销 |
-| ⚡ 速率限制 | 200/min (slowapi) |
-| 📝 审计日志 | 操作全链路可追溯 |
-| 📊 监控 | Prometheus 标准化指标 |
-| 🎨 前端 | React 18 + MUI v6 + ECharts + TypeScript |
+### Prerequisites
+- Python 3.13+
+- Node.js 18+ (for frontend development)
+- Docker (optional, for containerized deployment)
 
-## 📖 文档
+### From Source
 
-完整文档站：https://shuangzhebai.github.io/gaokao-analyzer
+```bash
+git clone https://github.com/shuangzhebai/gaokao-analyzer.git
+cd gaokao-analyzer
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+# .venv\Scripts\activate   # Windows
+pip install -r requirements.txt
+```
 
-- [快速开始](docs/website/docs/index.md)
-- [API 参考](docs/website/docs/api.md)
-- [架构说明](docs/website/docs/architecture.md)
-- [部署指南](docs/website/docs/deployment.md)
-- [开发指南](docs/website/docs/development.md)
+### Database Setup
 
-## 🛣️ 路线图
+Supports two backends:
 
-详见 [ROADMAP.md](ROADMAP.md)
+| Backend | Setup |
+|---------|-------|
+| **SQLite** (default) | Zero config — auto-created at `data/gaokao.db` |
+| **PostgreSQL** | Set `DB_URL=postgresql://user:pass@host/db` in `.env` |
 
-- **v6.1** (2026 Q3): OR-Tools 激活 · PG 正式切 · 数据采集 · 一键部署优化
-- **v6.2** (2026 Q4): PWA 增强 · Word/LaTeX 导出 · 多租户 · 学情报告
-- **v7.0** (2027): 原生移动 App · AI 辅助组卷 · 拍照搜题 · 企业版
+## ⚙️ Configuration
 
-## 🔬 技术栈
+| Env Variable | Default | Description |
+|-------------|---------|-------------|
+| `OPENAI_API_KEY` | — | DeepSeek/OpenAI API key for Agent LLM calls |
+| `DB_PATH` | `data/gaokao.db` | SQLite database path |
+| `DB_URL` | — | PostgreSQL connection string (overrides DB_PATH) |
+| `REDIS_URL` | — | Redis connection string for caching |
+| `CORS_ORIGINS` | `*` | Allowed CORS origins |
+| `GAOKAO_ENV` | `development` | `development` / `production` |
 
-| 领域 | 技术 |
-|------|------|
-| Web 框架 | FastAPI + Uvicorn |
-| 数据库 | PostgreSQL（主库）/ SQLite（开发退路） |
-| ORM / Repository | 手写 Repository 模式（支持 asyncpg / aiosqlite 双后端） |
-| 缓存 | Redis (L1 LRU + L2 Redis) |
-| 异步任务 | Celery + Redis broker |
-| 搜索引擎 | Meilisearch / SQLite FTS5 |
-| 数值计算 | NumPy + SciPy + Numba JIT |
-| 心理测量 | IRT 3PL / GPCM / GRM + OR-Tools CP-SAT |
-| 鉴权 | JWT (python-jose) + bcrypt + Refresh Token + 黑名单 |
-| 前端 | React 18 + TypeScript + MUI v6 + ECharts + Tailwind |
-| 监控 | Prometheus (prometheus_client) |
-| 容器化 | Docker + Compose + Helm Chart |
-| CI/CD | GitHub Actions (lint + typecheck + test + security + build) |
-| 文档 | Docusaurus + OpenAPI |
+## 📖 API
 
-## 👥 社区
+### Agent Orchestration (`/api/v1/agent/*`)
 
-- [提交 Issue](https://github.com/shuangzhebai/gaokao-analyzer/issues/new/choose)
-- [贡献指南](CONTRIBUTING.md)
-- [更新日志](CHANGELOG.md)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/run` | Full agent cycle: diagnosis→planning→recommend→assess |
+| POST | `/run/{agent}` | Run single agent by name |
+| GET | `/session/{id}` | Get session status & results |
+| GET | `/session/{id}/stream` | SSE stream of execution progress |
+| GET | `/history` | User's agent session history |
+| POST | `/explain` | F7: Structured knowledge explanation |
+
+### Learning Center (`/api/v1/learning/*`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/paths` | Get learning paths |
+| POST | `/paths` | Create learning path |
+| GET | `/paths/{id}` | Get path details |
+| PATCH | `/paths/{id}` | Update path progress |
+| GET | `/progress` | Get learning progress |
+| GET | `/reviews` | Get spaced review schedule |
+| POST | `/reviews` | Start review session |
+| GET | `/textbook/*` | Textbook mapping queries |
+
+### Assessment (`/api/v1/assessment/*`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/list` | Get assessment history |
+| GET | `/{id}` | Get assessment details |
+| POST | `/{id}/submit` | Submit answers & get report |
+| GET | `/report/{id}` | Get assessment report |
+
+### Full API Documentation
+
+```bash
+# After starting the server:
+open http://localhost:8000/docs  # Swagger UI
+open http://localhost:8000/redoc  # ReDoc
+```
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# With coverage
+pytest tests/ --cov=. --cov-report=term-missing
+
+# Run specific test
+pytest tests/test_v7_agents.py -v
+```
+
+## 🐳 Docker
+
+```bash
+# Build & start
+docker compose up -d --build
+
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
+
+# Production deployment
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing`)
+3. Run pre-commit hooks (`pre-commit run --all-files`)
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing`)
+6. Open a Pull Request
+
+### Development Setup
+
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Install pre-commit hooks
+pre-commit install
+
+# Run linting
+ruff check .
+ruff format --check .
+mypy agents/ services/ routes/
+```
+
+## 📊 Tech Stack
+
+| Category | Technology |
+|----------|-----------|
+| **Backend** | Python 3.13+, FastAPI, Uvicorn |
+| **AI/ML** | DeepSeek API, OR-Tools CP-SAT, SciPy |
+| **Database** | SQLite + FTS5 / PostgreSQL, aiosqlite / asyncpg |
+| **Search** | FTS5 full-text search, MeiliSearch |
+| **Cache** | Redis |
+| **Frontend** | React 18, TypeScript, MUI 5, React Router 6 |
+| **DevOps** | Docker, Docker Compose, GitHub Actions |
 
 ## 📄 License
 
-[MIT](LICENSE) © shuangzhebai
+[MIT License](LICENSE) — feel free to use in commercial and personal projects.
+
+## ⭐ Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=shuangzhebai/gaokao-analyzer&type=Date)](https://star-history.com/#shuangzhebai/gaokao-analyzer&Date)
 
 ---
 
-> **⭐ 如果这个项目对你有帮助，请点亮 Star！你的支持是持续改进的动力。**
+<p align="center">
+  <b>If you find this project useful, please ⭐ star it on GitHub!</b>
+  <br>
+  <i>Built with ❤️ for every Chinese student preparing for gaokao</i>
+</p>

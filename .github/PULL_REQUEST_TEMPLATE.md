@@ -1,23 +1,34 @@
-## 描述变更
-清晰描述你的改动内容。
+---
+name: Pull Request
+about: Submit a pull request
+title: ""
+labels: ''
+assignees: ''
+---
 
-## 关联 Issue
-Closes #（关联 Issue 编号）
+## Description
 
-## 测试
-- [ ] `pytest tests/ -q` 全部通过
-- [ ] `mypy --strict app.py` 无错误
-- [ ] 新增功能有对应测试覆盖
+Please include a summary of the changes and the related issue.
 
-## 类型
-- [ ] Bug 修复
-- [ ] 新功能
-- [ ] 重构
-- [ ] 文档更新
-- [ ] 工程配置
+Fixes #(issue)
 
-## 检查清单
-- [ ] 代码符合现有风格（ruff/black）
-- [ ] 添加了必要的测试
-- [ ] 文档已更新（如需要）
-- [ ] Commit 信息遵循 [Conventional Commits](https://www.conventionalcommits.org/)
+## Type of Change
+
+- [ ] Bug fix (non-breaking change fixing an issue)
+- [ ] New feature (non-breaking change adding functionality)
+- [ ] Breaking change (fix or feature that changes existing API)
+- [ ] Documentation update
+- [ ] Performance improvement
+
+## How Has This Been Tested?
+
+- [ ] `pytest tests/ -v` passed
+- [ ] `ruff check .` passed
+- [ ] `ruff format --check .` passed
+
+## Checklist
+
+- [ ] My code follows the project style guidelines
+- [ ] I have added tests that prove my fix/feature works
+- [ ] New and existing tests pass locally
+- [ ] I have updated the documentation accordingly

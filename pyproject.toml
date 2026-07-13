@@ -1,64 +1,43 @@
-# 代码质量工具配置（与 .pre-commit-config.yaml / requirements-dev.txt 对齐）
-[tool.black]
-line-length = 100
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "gaokao-analyzer"
+version = "7.1.0"
+description = "AI-powered Gaokao exam analysis system with IRT measurement, multi-agent orchestration, and intelligent exam composition"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+keywords = ["gaokao", "education", "ai", "irt", "exam-analysis", "learning"]
+authors = [
+    {name = "shuangzhebai"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Education",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/shuangzhebai/gaokao-analyzer"
+Repository = "https://github.com/shuangzhebai/gaokao-analyzer"
+Documentation = "https://shuangzhebai.github.io/gaokao-analyzer"
 
 [tool.ruff]
-line-length = 100
 target-version = "py313"
+line-length = 100
 
-[tool.mypy]
-python_version = "3.13"
-strict = true
-warn_unused_ignores = true
-exclude = ["tests"]
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ARG"]
 
-# 第三方库没有类型 stubs，忽略其导入
-[[tool.mypy.overrides]]
-module = [
-    "aiosqlite",
-    "slowapi.*",
-    "bs4",
-    "lxml",
-    "PIL",
-    "httpx",
-    "pdfplumber",
-    "docx",
-    "passlib.*",
-    "jose.*",
-    "sklearn.*",
-    "matplotlib.*",
-    "jieba",
-    "wordcloud",
-    "pypinyin",
-    "openpyxl",
-    "tqdm",
-    "snownlp",
-    "textrank4zh",
-    "zhipuai",
-    "dashscope",
-    "openai",
-    "selenium",
-    "webdriver_manager",
-    "tenacity",
-    "aiofiles",
-    "cachetools",
-    "PIL.*",
-    "cssutils",
-    "dateutil.*",
-    "py_mini_racer",
-    "xxhash",
-    "cairosvg",
-    "svgutils",
-    "rapidfuzz",
-    "markdown",
-    "yaml",
-]
-ignore_missing_imports = true
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
 
-# numpy/scipy stubs are extremely strict about overloads
-[[tool.mypy.overrides]]
-module = [
-    "numpy.*",
-    "scipy.*",
-]
-ignore_missing_imports = true
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

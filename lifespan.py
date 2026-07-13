@@ -148,6 +148,14 @@ def create_lifespan() -> Any:
         from services.cache_service import _close_redis
 
         await _close_redis()
+        # v7.0: 关闭 Agent OpenAI 客户端
+        try:
+            from routes.agent import _openai_client
+            if _openai_client:
+                await _openai_client.close()
+                logger.info("Agent OpenAI client closed")
+        except (ImportError, AttributeError):
+            pass
         # v6.0: 关闭数据库连接池
         from services.db_service import close_all
 
