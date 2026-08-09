@@ -578,10 +578,6 @@ if _HAS_PROMETHEUS:
     metrics_app = make_asgi_app(registry=_PROM_REGISTRY)
     app.mount("/metrics", metrics_app)
 
-    # 挂载标准 /metrics 端点（替代自实现）
-    metrics_app = make_asgi_app()
-    app.mount("/metrics", metrics_app)
-
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next: Any) -> Any:
         """采集 Prometheus 指标（prometheus_client 标准实现）。"""

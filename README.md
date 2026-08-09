@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/github/stars/shuangzhebai/gaokao-analyzer?style=for-the-badge&logo=github" alt="stars"/>
   <img src="https://img.shields.io/github/actions/workflow/status/shuangzhebai/gaokao-analyzer/ci.yml?style=for-the-badge&logo=githubactions" alt="ci"/>
   <img src="https://img.shields.io/badge/python-3.13%2B-blue?style=for-the-badge&logo=python" alt="python"/>
-  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="license"/>
+  <img src="https://img.shields.io/badge/license-Apache_2.0-blue?style=for-the-badge" alt="license"/>
   <img src="https://img.shields.io/badge/coverage-92%25-brightgreen?style=for-the-badge" alt="coverage"/>
 </p>
 
@@ -261,7 +261,7 @@ mypy agents/ services/ routes/
 
 ## 📄 License
 
-[MIT License](LICENSE) — feel free to use in commercial and personal projects.
+[Apache-2.0 License](LICENSE) — feel free to use in commercial and personal projects.
 
 ## ⭐ Star History
 
